@@ -1,0 +1,6 @@
+Smart2Raw Python port
+Copyright (C) 2026 Carlos Alberto Terencio de Bastos
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+This port is part of Smart2Raw and inherits the root repository license.
+See ../../LICENSE and ../../LICENSING.md.

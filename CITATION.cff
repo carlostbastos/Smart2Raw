@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Smart2Raw: self-adaptive integer numeric storage (header-only, C)"
+abstract: >-
+  A header-only C library that stores integer arrays in the smallest native class
+  that fits the real range (signed/unsigned 8/16/32/64 bits) and operates directly
+  on the compact form: aggregations and SIMD with runtime dispatch, block-wise
+  width (PFOR), zero-copy mmap, portable CRC32 I/O, and analytics on the compact data.
+type: software
+authors:
+  - given-names: "Carlos Alberto Terêncio"
+    name-particle: "de"
+    family-names: "Bastos"
+    alias: "carlostbastos"
+    email: "caterencio@gmail.com"
+    website: "https://br.linkedin.com/in/carlos-alberto-terencio-bastos"
+version: "3.3.5"
+date-released: "2026-05-31"
+license: AGPL-3.0-or-later
+repository-code: "https://github.com/carlostbastos/Smart2Raw"
+url: "https://github.com/carlostbastos/Smart2Raw"
+doi: "10.5281/zenodo.20477235"
+keywords:
+  - integer storage
+  - adaptive bit-width
+  - SIMD
+  - PFOR
+  - cache efficiency
+  - edge computing
+  - quantization

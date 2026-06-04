@@ -1,0 +1,12 @@
+{
+  "name": "@smart2raw/port-js",
+  "version": "3.3.5",
+  "description": "Pure JavaScript Smart2Raw port for browsers, Node.js, and portable .s2r files.",
+  "type": "module",
+  "main": "smart2raw.mjs",
+  "exports": "./smart2raw.mjs",
+  "scripts": {
+    "test": "node --test smart2raw.test.mjs"
+  },
+  "license": "AGPL-3.0-or-later"
+}

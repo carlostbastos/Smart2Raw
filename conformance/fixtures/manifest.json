@@ -1,0 +1,70 @@
+[
+  {
+    "file": "unsigned_u8.s2r",
+    "name": "unsigned_u8",
+    "signed": false,
+    "class": 8,
+    "count": 4,
+    "sum": 281,
+    "values": [
+      0,
+      1,
+      25,
+      255
+    ]
+  },
+  {
+    "file": "unsigned_u16.s2r",
+    "name": "unsigned_u16",
+    "signed": false,
+    "class": 16,
+    "count": 4,
+    "sum": 66046,
+    "values": [
+      0,
+      255,
+      256,
+      65535
+    ]
+  },
+  {
+    "file": "unsigned_u32.s2r",
+    "name": "unsigned_u32",
+    "signed": false,
+    "class": 32,
+    "count": 3,
+    "sum": 1065536,
+    "values": [
+      0,
+      65536,
+      1000000
+    ]
+  },
+  {
+    "file": "signed_i8.s2r",
+    "name": "signed_i8",
+    "signed": true,
+    "class": -8,
+    "count": 4,
+    "sum": -2,
+    "values": [
+      -128,
+      -1,
+      0,
+      127
+    ]
+  },
+  {
+    "file": "signed_i16.s2r",
+    "name": "signed_i16",
+    "signed": true,
+    "class": -16,
+    "count": 3,
+    "sum": 32638,
+    "values": [
+      -129,
+      0,
+      32767
+    ]
+  }
+]

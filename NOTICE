@@ -1,0 +1,15 @@
+Smart2Raw
+Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+
+This repository contains the open edition of Smart2Raw, including the
+header-only C library, examples, tests, benchmarks, documentation, notebooks,
+Python bindings, and tooling.
+
+The open edition is licensed under the GNU Affero General Public License
+version 3 or later (AGPL-3.0-or-later). See LICENSE for the full license text.
+
+Commercial licensing is available separately for proprietary use, closed network
+services, or use cases that cannot comply with the AGPL. See LICENSING.md and
+EDITIONS.md for details.
+
+SPDX-License-Identifier: AGPL-3.0-or-later

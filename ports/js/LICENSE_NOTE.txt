@@ -1,0 +1,6 @@
+Smart2Raw JavaScript port
+Copyright (C) 2026 Carlos Alberto Terencio de Bastos
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+This port is part of the Smart2Raw project and follows the same license model:
+AGPL-3.0-or-later, with commercial licensing available from the copyright holder.

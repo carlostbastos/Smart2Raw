@@ -1,0 +1,6 @@
+Smart2Raw Go port
+Copyright (C) 2026 Carlos Alberto Terencio de Bastos
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+This port is licensed under the same AGPL-3.0-or-later terms as the root project.
+See ../../LICENSE for the full license text.
