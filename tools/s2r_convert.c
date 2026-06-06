@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /*
@@ -9,10 +9,10 @@
  * Usage: s2r_convert <in.txt|-> <out.txt> [--op none|add|mul] [--by N]
  *                    [--signed] [--cap 32|64]
  *
- * Cycle (1 core): CONVERT (text -> compact, classify) -> PROCESS in place on the
- * compact form (overflow-safe arithmetic, no truncation) -> DECONVERT (compact ->
- * text). The overflow ceiling is --cap (default 32): if the operation would take
- * the result above 32 bits, the converter REFUSES instead of promoting beyond it
+ * Cycle (1 core): CONVERT (text -> compact, classify) -> PROCESS in place
+ * on the compact data (safe arithmetic, no truncation) -> UNCONVERT (compact ->
+ * text). The overflow ceiling is --cap (default 32): if the operation would push
+ * the result above 32 bits, the converter REFUSES instead of promoting beyond that
  * ("32-bit overflow only"). Use --cap 64 to allow promotion up to 64 bits.
  */
 #include <stdio.h>
@@ -53,10 +53,10 @@ int main(int argc, char **argv) {
     free(v);
     int cls_in = p.size<0?-p.size:p.size;
 
-    /* (2) PROCESS in place on the compact form, with overflow ceiling --cap */
+    /* (2) PROCESS in place on the compact data, with the --cap overflow ceiling */
     int refused=0;
     if (strcmp(op,"none")!=0 && n>0) {
-        /* project the largest |value| post-op to check the ceiling before applying */
+        /* project the largest |value| post-operation to check the ceiling before applying */
         uint64_t mx = p.size<0 ? (uint64_t)( s2r_max_signed_val(&p)>0? s2r_max_signed_val(&p):0 ) : s2r_max(&p);
         long double proj = (!strcmp(op,"add")) ? (long double)mx + by : (long double)mx * by;
         long double ceiling = (cap>=64)? 1.8446744073709552e19L : 4294967295.0L;
@@ -74,14 +74,14 @@ int main(int argc, char **argv) {
         s2r_pool_free(&p); return 7;
     }
 
-    /* (3) DECONVERT: compact -> text */
+    /* (3) UNCONVERT: compact -> text */
     FILE *fo = fopen(out,"w"); if(!fo){ perror("output"); s2r_pool_free(&p); return 1; }
     for(size_t i=0;i<p.count;i++){
         if(p.size<0) fprintf(fo,"%" PRId64 "\n", s2r_get_signed(&p,i));
         else fprintf(fo,"%" PRIu64 "\n", s2r_get(&p,i));
     }
     fclose(fo);
-    fprintf(stderr,"1-core cycle: converted (%d bits) -> processed [op=%s by=%ld cap=%ld] -> deconverted (%d bits) -> %s\n",
+    fprintf(stderr,"1-core cycle: converted (%d bits) -> processed [op=%s by=%ld cap=%ld] -> unconverted (%d bits) -> %s\n",
             cls_in, op, by, cap, cls_out, out);
     s2r_pool_free(&p);
     return 0;

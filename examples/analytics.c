@@ -1,9 +1,9 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-/* Columnar analytics: the class (1 byte) is a free zone-map; sum_fast + range. */
+/* Columnar analytics: the class (1 byte) is the free zone-map; sum_fast + range. */
 #include <stdio.h>
 #include "smart2raw.h"
 int main(void){

@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /* AI - KV-cache with outlier tokens, per-token blocks. */
@@ -20,7 +20,7 @@ int main(void){
     S2RBlocked b; s2r_blocked_build(&b, kv, N, D);  /* 1 block per token */
     size_t unif = 2*N;
     printf("ai_kv_cache: %.1f%% outlier tokens, per-token blocks\n", 100.0*kout/TOK);
-    printf("  uniform-u16 = %.1f MB | per block = %.1f MB -> %.2fx smaller\n",
+    printf("  uniform u16 = %.1f MB | per block = %.1f MB -> %.2fx smaller\n",
            unif/1e6, s2r_blocked_bytes(&b)/1e6, (double)unif/(double)s2r_blocked_bytes(&b));
     s2r_blocked_free(&b); free(kv);
     return 0;

@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /* Gap 1 test: signed lazy-carry (runnable on x86) */
@@ -14,14 +14,14 @@ static int pass=0,fail=0;
 int main(void){
     printf("Gap 1 - SIGNED lazy-carry arithmetic\n\n");
 
-    /* (a) add that pushes the MINIMUM beyond the class (a case only signed catches) */
+    /* (a) add that pushes the MINIMUM beyond the class (a signed-only case) */
     printf("(a) add_scalar_signed_safe\n");
     {
         S2RPool p; s2r_pool_init(&p,S2R_I8,3);
         s2r_push(&p,(uint64_t)(int64_t)-100);
         s2r_push(&p,(uint64_t)(int64_t)0);
         s2r_push(&p,(uint64_t)(int64_t)50);
-        /* -100 - 50 = -150 < -128 -> precisa I16 */
+        /* -100 - 50 = -150 < -128 -> needs I16 */
         int cls=s2r_add_scalar_signed_safe(&p,-50);
         CHECK(cls==16, "promoted I8->I16 (minimum overflowed)");
         CHECK(s2r_get_signed(&p,0)==-150 && s2r_get_signed(&p,2)==0, "values: -150 ... 0 (no wrap)");
@@ -29,13 +29,13 @@ int main(void){
 
         /* contrast: the native add would wrap in I8 */
         S2RPool q; s2r_pool_init(&q,S2R_I8,1); s2r_push(&q,(uint64_t)(int64_t)-100);
-        s2r_add_scalar(&q,(uint64_t)(int64_t)-50);  /* -150 doesn't fit in I8 */
-        CHECK(s2r_get_signed(&q,0)!=-150, "native wraps (proof of the bug that safe avoids)");
+        s2r_add_scalar(&q,(uint64_t)(int64_t)-50);  /* -150 does not fit in I8 */
+        CHECK(s2r_get_signed(&q,0)!=-150, "native wraps (proof of the bug the safe path avoids)");
         printf("    (native -100 + -50 in I8 = %lld, should be -150)\n",(long long)s2r_get_signed(&q,0));
         s2r_pool_free(&q);
     }
 
-    /* (b) mul by a NEGATIVE scalar: swaps min/max */
+    /* (b) mul by NEGATIVE scalar: inverts min/max */
     printf("\n(b) mul_scalar_signed_safe (negative scalar)\n");
     {
         S2RPool p; s2r_pool_init(&p,S2R_I8,3);
@@ -43,9 +43,9 @@ int main(void){
         s2r_push(&p,(uint64_t)(int64_t)10);    /* *(-3) = -30        */
         s2r_push(&p,(uint64_t)(int64_t)40);    /* *(-3) = -120       */
         int cls=s2r_mul_scalar_signed_safe(&p,-3);
-        CHECK(cls==16, "promoted I8->I16 (product exceeds I8)");
+        CHECK(cls==16, "promoveu I8->I16 (produto excede I8)");
         CHECK(s2r_get_signed(&p,0)==300 && s2r_get_signed(&p,1)==-30 && s2r_get_signed(&p,2)==-120,
-              "valores: 300, -30, -120 (min/max invertidos corretamente)");
+              "values: 300, -30, -120 (min/max inverted correctly)");
         s2r_pool_free(&p);
     }
 
@@ -79,8 +79,8 @@ int main(void){
         s2r_pool_free(&p);
     }
 
-    /* (e) honest limit: int64 overflow must refuse */
-    printf("\n(e) limite: overflow de int64\n");
+    /* (e) honest limit: int64 overflow must be refused */
+    printf("\n(e) limit: int64 overflow\n");
     {
         S2RPool p; s2r_pool_init(&p,S2R_I64,1); s2r_push(&p,(uint64_t)(INT64_MAX-5));
         int cls=s2r_add_scalar_signed_safe(&p,100);  /* overflows int64 */

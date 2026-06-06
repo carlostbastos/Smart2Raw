@@ -1,5 +1,5 @@
 // Smart2Raw Go port
-// Copyright (C) 2026 Carlos Alberto Terencio de Bastos
+// Copyright (C) 2026 Carlos Alberto Terencio Bastos
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package smart2raw
@@ -10,6 +10,7 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"sort"
 )
 
 const (
@@ -264,6 +265,111 @@ func (p *Pool) FitClass() error {
 		}
 	}
 	return nil
+}
+
+
+// Sort orders the pool in place while preserving its current Smart2Raw class.
+func (p *Pool) Sort() error {
+	if p.Signed() {
+		switch p.class {
+		case I8:
+			sort.Slice(p.i8, func(i, j int) bool { return p.i8[i] < p.i8[j] })
+		case I16:
+			sort.Slice(p.i16, func(i, j int) bool { return p.i16[i] < p.i16[j] })
+		case I32:
+			sort.Slice(p.i32, func(i, j int) bool { return p.i32[i] < p.i32[j] })
+		case I64:
+			sort.Slice(p.i64, func(i, j int) bool { return p.i64[i] < p.i64[j] })
+		default:
+			return ErrBadFormat
+		}
+		return nil
+	}
+	switch p.class {
+	case U8:
+		sort.Slice(p.u8, func(i, j int) bool { return p.u8[i] < p.u8[j] })
+	case U16:
+		sort.Slice(p.u16, func(i, j int) bool { return p.u16[i] < p.u16[j] })
+	case U32:
+		sort.Slice(p.u32, func(i, j int) bool { return p.u32[i] < p.u32[j] })
+	case U64:
+		sort.Slice(p.u64, func(i, j int) bool { return p.u64[i] < p.u64[j] })
+	default:
+		return ErrBadFormat
+	}
+	return nil
+}
+
+// IsSorted reports whether values are in ascending order.
+func (p *Pool) IsSorted() bool {
+	for i := 1; i < p.Len(); i++ {
+		a, ea := p.GetInt64(i - 1)
+		b, eb := p.GetInt64(i)
+		if ea != nil || eb != nil || a > b {
+			return false
+		}
+	}
+	return true
+}
+
+// UniqueSorted removes adjacent duplicates from an already sorted pool.
+func (p *Pool) UniqueSorted() error {
+	if p.Len() < 2 {
+		return nil
+	}
+	if p.Signed() {
+		vals := p.valuesInt64()
+		w := 1
+		for r := 1; r < len(vals); r++ {
+			if vals[r] != vals[w-1] {
+				vals[w] = vals[r]
+				w++
+			}
+		}
+		p.clearDataExceptClass()
+		p.class = I64
+		p.i64 = vals[:w]
+		return p.FitClass()
+	}
+	vals := p.valuesUint64()
+	w := 1
+	for r := 1; r < len(vals); r++ {
+		if vals[r] != vals[w-1] {
+			vals[w] = vals[r]
+			w++
+		}
+	}
+	p.clearDataExceptClass()
+	p.class = U64
+	p.u64 = vals[:w]
+	return p.FitClass()
+}
+
+// NUnique counts distinct values without modifying the pool.
+func (p *Pool) NUnique() (int, error) {
+	seen := make(map[int64]struct{}, p.Len())
+	for i := 0; i < p.Len(); i++ {
+		v, err := p.GetInt64(i)
+		if err != nil {
+			return 0, err
+		}
+		seen[v] = struct{}{}
+	}
+	return len(seen), nil
+}
+
+// ValueCounts returns a value -> frequency map. It is intended for analytics and tests;
+// hot u8 paths should prefer specialized histograms in the C core.
+func (p *Pool) ValueCounts() (map[int64]uint64, error) {
+	out := make(map[int64]uint64)
+	for i := 0; i < p.Len(); i++ {
+		v, err := p.GetInt64(i)
+		if err != nil {
+			return nil, err
+		}
+		out[v]++
+	}
+	return out, nil
 }
 
 func (p *Pool) Save(path string) error {

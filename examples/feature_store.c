@@ -1,9 +1,9 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-/* Feature store: each column in its own width (age u8, flag u8, price u16, id u32). */
+/* Feature store: each column at its own width (age u8, flag u8, price u16, id u32). */
 #include <stdio.h>
 #include "smart2raw.h"
 int main(void){
@@ -18,12 +18,12 @@ int main(void){
         s2r_push_adaptive(&id,    (uint64_t)((unsigned)i * 37u % 4000000u));
     }
     size_t total = s2r_used_bytes(&age)+s2r_used_bytes(&flag)+s2r_used_bytes(&price)+s2r_used_bytes(&id);
-    size_t uniforme = (size_t)N*8*4;
+    size_t uniform = (size_t)N*8*4;
     printf("feature_store: 4 columns x %d rows\n", N);
     printf("  widths: age=%d flag=%d price=%d id=%d bits\n",
            (int)age.size, (int)flag.size, (int)price.size, (int)id.size);
-    printf("  total = %zu KB vs uniform int64 = %zu KB -> %.0f%% less\n",
-           total/1024, uniforme/1024, 100.0*(1.0 - (double)total/(double)uniforme));
+    printf("  total = %zu KB vs int64 uniform = %zu KB -> %.0f%% menos\n",
+           total/1024, uniform/1024, 100.0*(1.0 - (double)total/(double)uniform));
     s2r_pool_free(&age); s2r_pool_free(&flag); s2r_pool_free(&price); s2r_pool_free(&id);
     return 0;
 }

@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #define _POSIX_C_SOURCE 199309L
@@ -29,14 +29,14 @@ int main(void){
 
   printf("=== (A) Activation with %.1f%% outlier channels (T=%zu, C=%zu) ===\n",100.0*nout/C,T,C);
   S2RBlocked bc; s2r_blocked_build(&bc,cm,N,T);   /* 1 block per channel (localized outlier) */
-  S2RBlocked br; s2r_blocked_build(&br,rm,N,C);  /* 1 block per token (spread-out outlier) */
-  /* exactness */
+  S2RBlocked br; s2r_blocked_build(&br,rm,N,C);  /* 1 block per token (spread outlier) */
+  /* correctness */
   uint64_t s=0; for(size_t i=0;i<N;i++) s+=cm[i];
   printf("  safe uniform (u16): %.1f MB\n", uniform/1e6);
-  printf("  per-CHANNEL (localized outlier): %.1f MB -> %.2fx smaller  | exact sum: %s\n",
+  printf("  per-CHANNEL (localized outlier): %.1f MB -> %.2fx smaller  | exact naive sum: %s\n",
          s2r_blocked_bytes(&bc)/1e6, (double)uniform/s2r_blocked_bytes(&bc),
          s2r_blocked_sum(&bc)==s?"yes":"NO");
-  printf("  per-TOKEN (spread-out outlier): %.1f MB -> %.2fx  (honest: layout matters!)\n",
+  printf("  per-TOKEN (spread outlier): %.1f MB -> %.2fx  (honest: layout matters!)\n",
          s2r_blocked_bytes(&br)/1e6, (double)uniform/s2r_blocked_bytes(&br));
   s2r_blocked_free(&bc); s2r_blocked_free(&br);
 
@@ -53,8 +53,8 @@ int main(void){
          100.0*kout/TOK, kunif/1e6, s2r_blocked_bytes(&bk)/1e6, (double)kunif/s2r_blocked_bytes(&bk));
   s2r_blocked_free(&bk); free(kv);
 
-  printf("\n=== (C) Zero-point correction (row-sum) accelerated per block ===\n");
-  /* int8 quantized weight matrix [Mr x K], stored per block (rows) */
+  printf("\n=== (C) Block-accelerated zero-point correction (row-sum) ===\n");
+  /* quantized int8 weight matrix [Mr x K], stored block-wise (rows) */
   size_t Mr=4096, K=4096, NN=Mr*K;
   uint64_t *w=(uint64_t*)malloc(NN*sizeof(uint64_t));
   for(size_t i=0;i<NN;i++) w[i]=(uint64_t)(rand()%256);  /* u8 */

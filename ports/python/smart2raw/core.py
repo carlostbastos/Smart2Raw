@@ -1,5 +1,5 @@
 # Smart2Raw Python port
-# Copyright (C) 2026 Carlos Alberto Terencio de Bastos
+# Copyright (C) 2026 Carlos Alberto Terencio Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 from __future__ import annotations
@@ -168,6 +168,35 @@ class Smart2RawPool:
 
     def sum(self) -> int:
         return sum(self._values)
+
+
+    def sort(self) -> "Smart2RawPool":
+        """Sort the pool in place while preserving the current class."""
+        self._values.sort()
+        return self
+
+    def is_sorted(self) -> bool:
+        return all(self._values[i - 1] <= self._values[i] for i in range(1, len(self._values)))
+
+    def unique_sorted(self) -> "Smart2RawPool":
+        """Remove adjacent duplicates from an already sorted pool."""
+        if len(self._values) < 2:
+            return self
+        out = [self._values[0]]
+        for value in self._values[1:]:
+            if value != out[-1]:
+                out.append(value)
+        self._values = out
+        return self.fit_class()
+
+    def nunique(self) -> int:
+        return len(set(self._values))
+
+    def value_counts(self) -> dict[int, int]:
+        out: dict[int, int] = {}
+        for value in self._values:
+            out[value] = out.get(value, 0) + 1
+        return out
 
     def to_bytes(self) -> bytes:
         width = byte_width(self.size)

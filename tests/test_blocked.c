@@ -1,9 +1,9 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-/* Test of the block-wise width module (PFOR) — v3.3.3 */
+/* Test of the block-wise width module (PFOR) - v3.3.3 */
 #include <stdio.h>
 #include <stdlib.h>
 #include "smart2raw.h"
@@ -24,19 +24,19 @@ int main(void){
         for(size_t i=0;i<n;i++){ a[i]=(i*2654435761u)%1000; s+=a[i]; if(a[i]>mx)mx=a[i]; }
         S2RBlocked b; CHECK(s2r_blocked_build(&b,a,n,256),"build");
         int rt=1; for(size_t i=0;i<n;i++) if(s2r_blocked_get(&b,i)!=a[i]){rt=0;break;}
-        CHECK(rt,"get(i) == src[i] for all i");
+        CHECK(rt,"get(i) == src[i] para todo i");
         CHECK(s2r_blocked_sum(&b)==s,"sum == naive sum");
         CHECK(s2r_blocked_max(&b)==mx,"max == naive max");
         s2r_blocked_free(&b); free(a);
     }
-    /* 2) edges: empty, 1 element, last partial block */
+    /* 2) edges: empty, 1 element, partial last block */
     {
         S2RBlocked b; CHECK(s2r_blocked_build(&b,NULL,0,256),"empty build");
         CHECK(b.count==0 && s2r_blocked_sum(&b)==0,"empty: sum 0"); s2r_blocked_free(&b);
         uint64_t one[1]={42}; S2RBlocked c; s2r_blocked_build(&c,one,1,256);
         CHECK(s2r_blocked_get(&c,0)==42 && c.nblocks==1,"1 elemento"); s2r_blocked_free(&c);
         uint64_t p[300]; for(int i=0;i<300;i++)p[i]=(uint64_t)i; S2RBlocked d; s2r_blocked_build(&d,p,300,256);
-        CHECK(d.nblocks==2 && s2r_blocked_get(&d,299)==299,"last partial block ok"); s2r_blocked_free(&d);
+        CHECK(d.nblocks==2 && s2r_blocked_get(&d,299)==299,"partial last block ok"); s2r_blocked_free(&d);
     }
     /* 3) memory gain: clean (no benefit) vs outliers (recovers) */
     {
@@ -60,7 +60,7 @@ int main(void){
         double r_out=(double)whole_bytes(a,n)/(double)s2r_blocked_bytes(&out);
         printf("  outliers: single=%.2f MB  block=%.2f MB  -> %.2fx smaller\n",
                whole_bytes(a,n)/1e6, s2r_blocked_bytes(&out)/1e6, r_out);
-        CHECK(r_out>3.0,"0.01%% outliers: recovers >3x of memory");
+        CHECK(r_out>3.0,"0.01%% outliers: recovers >3x memory");
         s2r_blocked_free(&out); free(a);
     }
     printf("=== %d OK, %d FAIL ===\n",ok,fail);

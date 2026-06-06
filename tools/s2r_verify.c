@@ -1,14 +1,14 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /*
- * s2r_verify.c - identity/integrity verifier for .s2r files.
+ * s2r_verify.c - identity/integrity verifier for .s2r files (Form 2).
  * Build: gcc -O2 -I ../include s2r_verify.c -o s2r_verify
  * Usage: s2r_verify <file.s2r>
- * Output: field-by-field report; exit code 0 = INTACT, !=0 = invalid/corrupt.
- *         Suitable for scripts and CI.
+ * Output: field-by-field report; exit code 0 = INTACT, !=0 = invalid/corrupted.
+ *        Adequado para scripts e CI.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
 
     /* 1) read and check the raw header (16 bytes) */
     FILE *f = fopen(path, "rb");
-    if (!f) { perror("abrir"); return 3; }
+    if (!f) { perror("open"); return 3; }
     unsigned char h[16];
     if (fread(h, 1, 16, f) != 16) { fprintf(stderr, "[X] file too short\n"); fclose(f); return 4; }
     fseek(f, 0, SEEK_END); long fsz = ftell(f); fclose(f);
@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
     uint64_t expected = ok_class ? 16 + count*(uint64_t)eb + 4 : 0;
     int ok_size = ok_class && ((uint64_t)fsz == expected);
 
-    printf("verifying: %s\n", path);
+    printf("checking: %s\n", path);
     printf("  [%s] magic 0x%08x (flags 0x%02x)\n", ok_magic?"ok":"X ", magic, flags);
     printf("  [%s] fmt = %u\n",   fmt==1?"ok":"? ", fmt);
     printf("  [%s] class = %d bits%s\n", ok_class?"ok":"X ", absbits, size<0?" signed":"");
@@ -53,8 +53,8 @@ int main(int argc, char **argv) {
     S2RPool p; e = s2r_load_portable(&p, path); if (e==S2R_OK) s2r_pool_free(&p);
 #endif
     printf("  [%s] payload CRC32\n", e==S2R_OK?"ok":"X ");
-    if (e != S2R_OK) { printf("RESULT: CORRUPT (%s)\n", s2r_strerror(e)); return 6; }
+    if (e != S2R_OK) { printf("RESULT: CORRUPTED (%s)\n", s2r_strerror(e)); return 6; }
 
-    printf("RESULT: INTACT  (%" PRIu64 " elements)\n", count);
+    printf("RESULT: INTACT   (%" PRIu64 " elements)\n", count);
     return 0;
 }

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # Smart2Raw
-# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+# Copyright (C) 2026 Carlos Alberto Terêncio Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Builds the Smart2Raw shared library for the current OS.
 
 Linux  -> libsmart2raw.so      Windows -> smart2raw.dll
 macOS  -> libsmart2raw.dylib
 
-Needs a C compiler (gcc/clang on POSIX; mingw gcc or MSVC 'cl' on Windows).
+Needs a C compiler (gcc/clang on POSIX; gcc-mingw or MSVC 'cl' on Windows).
 Usage: python build_lib.py
 """
 import os, sys, subprocess, shutil
@@ -28,7 +28,7 @@ def main():
         elif shutil.which("cl"):
             run(["cl", "/O2", "/LD", f"/I{INC}", SRC, f"/Fe:{out}"])
         else:
-            sys.exit("Nenhum compilador C encontrado (instale MinGW gcc ou MSVC).")
+            sys.exit("No C compiler found (install MinGW gcc or MSVC).")
     else:
         ext = "dylib" if plat == "darwin" else "so"
         out = os.path.join(HERE, f"libsmart2raw.{ext}")

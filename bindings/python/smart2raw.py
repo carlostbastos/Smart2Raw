@@ -1,18 +1,18 @@
 # Smart2Raw
-# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+# Copyright (C) 2026 Carlos Alberto Terêncio Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """
 smart2raw - Python (ctypes) wrapper over the Smart2Raw C library.
 
-"Python that drives it": loads the shared library (libsmart2raw.so / .dylib /
-smart2raw.dll) and exposes a Pythonic API. Build the lib once with
-`python build_lib.py` (or point S2R_LIB to an already-compiled .so/.dll).
+The "Python in charge": loads the shared library (libsmart2raw.so /
+.dylib / smart2raw.dll) and exposes a Pythonic API. Build the lib once with
+`python build_lib.py` (or point S2R_LIB to an already-built .so/.dll).
 
 Usage:
     from smart2raw import Pool, S2R_8
     p = Pool(S2R_8)
     for v in range(1000):
-        p.push(v)          # grows the class automatically (no truncation)
+        p.push(v)          # grows the class by itself (no truncation)
     print(p.sum(), p.min(), p.max(), p.class_bits)
     p.save("data.s2r")
     q = Pool.load("data.s2r")
@@ -35,7 +35,7 @@ def _find_lib():
         cand = os.path.join(here, n)
         if os.path.exists(cand):
             return cand
-    # fallback: any lib in the directory
+    # fallback: qualquer lib no diretorio
     for pat in ("libsmart2raw.*", "smart2raw.*"):
         hits = [h for h in glob.glob(os.path.join(here, pat))
                 if h.rsplit(".", 1)[-1] in ("so", "dylib", "dll")]
@@ -89,7 +89,7 @@ class Pool:
     def __init__(self, size_bits=S2R_8, capacity=16, _ptr=None):
         self._p = _ptr if _ptr is not None else _new(size_bits, capacity)
         if not self._p:
-            raise MemoryError("falha ao criar S2RPool")
+            raise MemoryError("failed to create S2RPool")
         self.signed = size_bits < 0
 
     # --- insertion ---
@@ -104,7 +104,7 @@ class Pool:
         for v in it:
             self.push(v)
 
-    # --- access ---
+    # --- acesso ---
     def __len__(self):
         return _count(self._p)
 
@@ -135,7 +135,7 @@ class Pool:
     def max(self):
         return _max_s(self._p) if self.signed else _max(self._p)
 
-    # --- overflow-safe arithmetic (lazy-carry); returns the new class in bits ---
+    # --- safe arithmetic (lazy-carry); returns the new class in bits ---
     def add_scalar(self, s):
         return _add_safe_s(self._p, int(s)) if self.signed else _add_safe(self._p, int(s))
     def mul_scalar(self, s):

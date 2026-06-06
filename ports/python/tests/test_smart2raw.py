@@ -1,5 +1,5 @@
 # Smart2Raw Python port tests
-# Copyright (C) 2026 Carlos Alberto Terencio de Bastos
+# Copyright (C) 2026 Carlos Alberto Terencio Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import tempfile
@@ -56,6 +56,20 @@ class Smart2RawPythonTests(unittest.TestCase):
         blob[16] ^= 0x7F
         with self.assertRaises(S2RFormatError):
             Smart2RawPool.from_bytes(blob)
+
+
+    def test_analytics_v2(self):
+        p = Smart2RawPool([10, -1, -128, 10, 0, -1], signed=True)
+        self.assertFalse(p.is_sorted())
+        p.sort()
+        self.assertTrue(p.is_sorted())
+        self.assertEqual(p.values, (-128, -1, -1, 0, 10, 10))
+        self.assertEqual(p.nunique(), 4)
+        self.assertEqual(p.value_counts()[-1], 2)
+        self.assertEqual(p.value_counts()[10], 2)
+        p.unique_sorted()
+        self.assertEqual(p.values, (-128, -1, 0, 10))
+        self.assertEqual(p.size, -8)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-# Build das ferramentas. Uso: make  (precisa de gcc)
+# Build the tools. Usage: make  (needs gcc)
 CC      ?= gcc
 CFLAGS  ?= -O2 -std=c11 -pedantic -Wall -Wextra -I ../include
 BINS     = s2r s2r_verify s2r_convert

@@ -1,21 +1,21 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /*
- * s2r.c - Smart2Raw CLI.
+ * s2r.c - CLI do Smart2Raw.
  * Build:  gcc -O2 -I ../include s2r.c -o s2r
  *
- * Subcommands:
+ * Subcomandos:
  *   pack   <in.txt> <out.s2r> [--signed]   text integers -> .s2r (classifies)
  *   unpack <in.s2r> <out.txt>              .s2r -> text integers
- *   info   <file.s2r>                      file metadata
- *   verify <file.s2r>                      integrity (magic, class, count, CRC)
+ *   info   <file.s2r>                          file metadata
+ *   verify <file.s2r>                          integrity (magic, class, count, CRC)
  *   agg    <file.s2r> <sum|min|max|count-gt N|count-range A B>
  *
- * Text input is a sequence of decimal integers separated by spaces or newlines
- * (use "-" to read from stdin in pack).
+ * Text input is a sequence of decimal integers separated by spaces
+ * or newlines (use "-" to read from stdin in pack).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -95,7 +95,7 @@ static int cmd_unpack(int argc, char **argv) {
 static int read_header(const char *path, int *size, unsigned *flags, unsigned *fmt,
                        uint64_t *count, long *filesz) {
     FILE *f = fopen(path, "rb");
-    if (!f) { perror("abrir"); return -1; }
+    if (!f) { perror("open"); return -1; }
     unsigned char h[16];
     if (fread(h, 1, 16, f) != 16) { fclose(f); return -2; }
     fseek(f, 0, SEEK_END); *filesz = ftell(f); fclose(f);
@@ -117,7 +117,7 @@ static int cmd_info(int argc, char **argv) {
     printf("class   : %d bits%s (%d byte/elem)\n", size<0?-size:size, size<0?" signed":"", eb);
     printf("flags   : 0x%02x\n", flags);
     printf("count   : %" PRIu64 " elements\n", count);
-    printf("size    : %ld bytes  (expected %llu = 16 + %" PRIu64 "*%d + 4)\n",
+    printf("size : %ld bytes  (expected %llu = 16 + %" PRIu64 "*%d + 4)\n",
            fsz, (unsigned long long)(16 + count*(uint64_t)eb + 4), count, eb);
     return 0;
 }
@@ -126,20 +126,20 @@ static int cmd_verify(int argc, char **argv) {
     if (argc < 3) return usage();
 #if S2R_HAS_MMAP
     S2RMap m;
-    S2RError e = s2r_map_open(&m, argv[2], 1);   /* 1 = verifica CRC */
+    S2RError e = s2r_map_open(&m, argv[2], 1);   /* 1 = verify CRC */
     if (e == S2R_OK) {
         printf("INTACT: %s (%zu elements, class %d bits, CRC ok)\n",
                argv[2], (size_t)m.pool.count, (int)(m.pool.size<0?-m.pool.size:m.pool.size));
         s2r_map_close(&m);
         return 0;
     }
-    fprintf(stderr, "FAILED: %s -> %s\n", argv[2], s2r_strerror(e));
+    fprintf(stderr, "FAIL: %s -> %s\n", argv[2], s2r_strerror(e));
     return 1;
 #else
     S2RPool p;
-    S2RError e = s2r_load_portable(&p, argv[2]);  /* load tambem valida CRC */
+    S2RError e = s2r_load_portable(&p, argv[2]);  /* load also validates CRC */
     if (e == S2R_OK) { printf("INTACT: %s (%zu elements)\n", argv[2], (size_t)p.count); s2r_pool_free(&p); return 0; }
-    fprintf(stderr, "FAILED: %s -> %s\n", argv[2], s2r_strerror(e));
+    fprintf(stderr, "FAIL: %s -> %s\n", argv[2], s2r_strerror(e));
     return 1;
 #endif
 }
@@ -152,7 +152,7 @@ static int cmd_agg(int argc, char **argv) {
     const char *op = argv[3];
     int sg = (p.size < 0);
     if (!strcmp(op, "sum")) {
-        if (sg) printf("%" PRId64 "\n", (int64_t)s2r_sum(&p));   /* soma em complemento de 2 */
+        if (sg) printf("%" PRId64 "\n", (int64_t)s2r_sum(&p));   /* sum in two's complement */
         else    printf("%" PRIu64 "\n", s2r_sum_fast(&p));
     } else if (!strcmp(op, "min")) {
         if (sg) printf("%" PRId64 "\n", s2r_min_signed_val(&p)); else printf("%" PRIu64 "\n", s2r_min(&p));

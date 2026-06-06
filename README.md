@@ -1,14 +1,64 @@
 # Smart2Raw
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20477235.svg)](https://doi.org/10.5281/zenodo.20477235)
+[![License: AGPL v3+](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-3.3.6-informational.svg)](CHANGELOG.md)
+[![Language: C11](https://img.shields.io/badge/C-C11-00599C.svg)](include/smart2raw.h)
+[![Header-only](https://img.shields.io/badge/build-header--only-success.svg)](include/smart2raw.h)
+[![Tests](https://img.shields.io/badge/tests-15%20suites%20%C2%B7%200%20failures-brightgreen.svg)](scripts/build_and_test.sh)
+[![Ports](https://img.shields.io/badge/ports-Go%20%C2%B7%20JS%20%C2%B7%20Python-blueviolet.svg)](ports/)
+
 **Adaptive numeric storage for integer data.**
 
-Smart2Raw is a lightweight library and portable binary format for storing large integer arrays using the smallest native integer width that safely represents the actual data range: 8, 16, 32 or 64 bits, signed or unsigned.
+Smart2Raw is a header-only C library and a portable binary format (`.s2r`) for storing large integer arrays using the smallest native integer width that safely represents the actual data range: 8, 16, 32 or 64 bits, signed or unsigned.
 
 The core idea is simple:
 
 > **Classify once. Operate forever in the most compact native format.**
 
-Instead of storing everything as `int64` or `int32` by default, Smart2Raw scans the real value range and selects the smallest native type that preserves every value. After that, operations run directly on the compact representation: sum, min, max, count, filters, statistics, group-by, persistence and memory-mapped reads, without decompression and without manual bit-packing.
+Instead of storing everything as `int64` or `int32` by default, Smart2Raw scans the real value range and selects the smallest native type that preserves every value. After that, operations run directly on the compact representation: sum, min, max, count, filters, statistics, group-by, sort, persistence and memory-mapped reads, without decompression and without manual bit-packing.
+
+---
+
+## Table of contents
+
+- [What's new in 3.3.6](#whats-new-in-336)
+- [Why this matters](#why-this-matters)
+- [What Smart2Raw is](#what-smart2raw-is)
+- [What Smart2Raw is not](#what-smart2raw-is-not)
+- [Mental model](#mental-model)
+- [Quickstart in C](#quickstart-in-c)
+- [Command-line tools](#command-line-tools)
+- [Core principle](#core-principle)
+- [Main features](#main-features)
+- [API reference](#api-reference)
+- [The `.s2r` file format](#the-s2r-file-format)
+- [Where Smart2Raw can help](#where-smart2raw-can-help)
+- [Ports and ecosystem](#ports-and-ecosystem)
+- [Format conformance](#format-conformance)
+- [Measured results](#measured-results)
+- [When Smart2Raw does not help much](#when-smart2raw-does-not-help-much)
+- [Design philosophy](#design-philosophy)
+- [Build and test](#build-and-test)
+- [Repository layout](#repository-layout)
+- [Roadmap](#roadmap)
+- [Editions and license](#editions-and-license)
+- [Citation](#citation)
+- [One-sentence summary](#one-sentence-summary)
+
+---
+
+## What's new in 3.3.6
+
+Release 3.3.6 adds **Analytics v2**: compact integer primitives that are useful before you reach for a full table/columnar layer, implemented in the C core and mirrored across the Go, JavaScript and Python ports (with a shared `.s2r` contract verified by conformance tests).
+
+- `s2r_sort` — sort a pool in place while preserving its integer class.
+- `s2r_is_sorted` — ascending-order check.
+- `s2r_unique_sorted` — drop adjacent duplicates from a sorted pool.
+- `s2r_nunique` — count distinct values without modifying the pool.
+- `s2r_value_counts_u8` — 256-bin value counts for byte classes (for signed `i8`, bins use the raw stored byte: `-1` is bin 255, `-128` is bin 128).
+
+See [`docs/ANALYTICS_V2.md`](docs/ANALYTICS_V2.md) and [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -36,8 +86,8 @@ Smart2Raw reduces that waste by storing integers in the smallest native width th
 
 Smart2Raw is:
 
-- a C header-only library;
-- a portable `.s2r` binary format;
+- a C header-only library (`include/smart2raw.h`, C11, no external dependencies);
+- a portable `.s2r` binary format (canonical little-endian + CRC32);
 - a compact integer storage layer;
 - a lightweight scan and aggregation engine;
 - a set of CLI tools and examples;
@@ -92,23 +142,31 @@ Fewer bytes means more values per cache line, less memory traffic, faster scans,
 
 ## Quickstart in C
 
+Header-only — just include it and compile with any C11 compiler.
+
 ```c
 #include "smart2raw.h"
 
 int main(void) {
     S2RPool pool;
 
-    s2r_pool_init(&pool, S2R_8, 1024);
+    s2r_pool_init(&pool, S2R_8, 1024);          /* start at u8 */
 
     for (uint64_t v = 0; v < 1000; v++) {
-        s2r_push_adaptive(&pool, v);
+        s2r_push_adaptive(&pool, v);            /* promotes u8 -> u16 -> ... as needed */
     }
 
-    uint64_t total = s2r_sum_fast(&pool);
+    uint64_t total = s2r_sum_fast(&pool);       /* SIMD-aware reduction */
+    (void)total;
 
+    s2r_save_portable(&pool, "data.s2r");       /* portable LE + CRC32 */
     s2r_pool_free(&pool);
     return 0;
 }
+```
+
+```sh
+cc -O2 -std=c11 -I include quickstart.c -o quickstart && ./quickstart
 ```
 
 `push_adaptive` automatically promotes the pool when a new value no longer fits the current width.
@@ -120,6 +178,28 @@ u8 -> u16 -> u32 -> u64
 ```
 
 No silent truncation. No manual type guessing.
+
+---
+
+## Command-line tools
+
+Build with `cd tools && make` (needs a C compiler). Tools read and write integers as decimal text (one per line or space-separated) and exchange `.s2r` files with the library and every port.
+
+```text
+s2r pack   <in.txt|-> <out.s2r> [--signed]   text integers -> .s2r (classifies)
+s2r unpack <in.s2r> <out.txt>                .s2r -> text integers
+s2r info   <file.s2r>                        metadata (class, count, fmt)
+s2r verify <file.s2r>                        integrity (magic, class, count, CRC)
+s2r agg    <file.s2r> sum|min|max|count-gt N|count-range A B
+```
+
+```text
+s2r_verify  <file.s2r>                       field-by-field check + CRC32 recompute
+                                             exit 0 = INTACT, non-zero = invalid/corrupted
+s2r_convert <in|-> <out> [--op none|add|mul] [--by N] [--signed] [--cap 32|64]
+            single-core cycle: convert -> process in place -> unconvert,
+            refusing instead of overflowing past the --cap ceiling
+```
 
 ---
 
@@ -203,9 +283,9 @@ This reduces reallocations and avoids intermediate overflows.
 
 ### SIMD-aware reductions
 
-The C implementation can use hardware-specific optimized paths when available.
+The C implementation can use hardware-specific optimized paths when available, selected by runtime dispatch.
 
-On x86 with AVX2, byte summation can use `vpsadbw`, which performs horizontal byte sums in hardware and avoids costly widening patterns.
+On x86 with AVX2, byte summation can use `vpsadbw`, which performs horizontal byte sums in hardware and avoids costly widening patterns. There is a NEON path for ARM.
 
 When the optimized path is not available, Smart2Raw falls back to scalar code.
 
@@ -236,11 +316,11 @@ little-endian payload
 CRC32
 ```
 
-The payload is written in canonical little-endian order. CRC32 allows corruption detection.
+The payload is written in canonical little-endian order. CRC32 allows corruption detection. The same files are read and written by the C library and every port.
 
 ### Block-wise width
 
-In addition to one width for the whole array, Smart2Raw supports block-wise width.
+In addition to one width for the whole array, Smart2Raw supports block-wise width (a PFOR-style layout).
 
 This reduces the impact of outliers: a large value inflates only its own block instead of forcing the entire collection to use a wider class.
 
@@ -256,6 +336,9 @@ Smart2Raw includes operations useful for scans and lightweight analytics:
 - standard deviation;
 - count by condition;
 - range filters;
+- sort and sortedness checks;
+- unique / distinct counts;
+- value counts for small integer classes;
 - histograms;
 - group-by count;
 - group-by sum;
@@ -263,75 +346,112 @@ Smart2Raw includes operations useful for scans and lightweight analytics:
 
 ---
 
-## Architecture
+## API reference
 
-Smart2Raw is layered around a single idea: **the on-disk format is the contract, and everything else orbits it.** That is what lets a file written by the C core be read by the Go, JavaScript or Python ports without any shared runtime.
+A representative subset of the public, `static inline` API in `include/smart2raw.h`. Unsigned and signed variants exist for most operations; only key signatures are shown.
 
-```mermaid
-flowchart TB
-    subgraph L0["The .s2r format — the portable contract"]
-        FMT["magic · class · flags · fmt · count · little-endian payload · CRC32"]
-    end
+**Types:** `S2RPool`, `S2RMap`, `S2RBlocked`, `S2RTracked`, `S2RDeferred` · enums `S2RError`, `S2RSize` (`S2R_8/16/32/64`), `S2RFlags`.
 
-    subgraph L1["C core — include/smart2raw.h (header-only, zero deps)"]
-        direction TB
-        M1["Classification<br/>u8/u16/u32/u64 · i8/i16/i32/i64"]
-        M2["S2RPool — adaptive push,<br/>self-promotion, direct typed access"]
-        M3["Reductions + runtime SIMD dispatch<br/>AVX2 vpsadbw / NEON / scalar fallback"]
-        M4["Analytics — stats, filters, histogram,<br/>group-by, bidirectional width healing"]
-        M5["Block-wise width (PFOR)<br/>S2RBlocked · signed · block sum_fast"]
-        M6["Persistence — portable I/O + CRC32,<br/>zero-copy mmap (LE + big-endian COW)"]
-    end
+```c
+/* Lifecycle */
+int       s2r_pool_init(S2RPool *p, int8_t size, size_t capacity);
+void      s2r_pool_free(S2RPool *p);
+void      s2r_clear(S2RPool *p);
+int       s2r_reserve(S2RPool *p, size_t new_cap);
+int       s2r_shrink_to_fit(S2RPool *p);
+int       s2r_copy(S2RPool *dst, const S2RPool *src);
 
-    subgraph L2["Consumers"]
-        T["CLI<br/>s2r · s2r_verify · s2r_convert"]
-        B["Python binding<br/>(ctypes over a stable C ABI)"]
-        P["Ports — Go · JS · Python<br/>(independent implementations)"]
-    end
+/* Insertion (adaptive = grows class; checked = errors instead) */
+S2RError  s2r_push_adaptive(S2RPool *p, uint64_t v);
+S2RError  s2r_push_signed_adaptive(S2RPool *p, int64_t v);
+size_t    s2r_push_many(S2RPool *p, const uint64_t *values, size_t count);
+int       s2r_from_array_auto(S2RPool *p, const uint64_t *arr, size_t count);
 
-    CONF["Conformance — canonical fixtures + manifest<br/>cross-language read/write checks"]
+/* Access */
+uint64_t  s2r_get(const S2RPool *p, size_t i);
+int64_t   s2r_get_signed(const S2RPool *p, size_t i);
+size_t    s2r_used_bytes(const S2RPool *p);
+int       s2r_is_signed(const S2RPool *p);
 
-    T --> L1
-    B --> L1
-    L1 --> FMT
-    P --> FMT
-    CONF --> FMT
+/* Classification / healing */
+S2RSize   s2r_classify(uint64_t v);
+S2RSize   s2r_classify_array(const uint64_t *arr, size_t count);
+int       s2r_fit_class(S2RPool *p);          /* heal down to smallest fitting class */
+
+/* Reductions (SIMD-aware sum_fast) */
+uint64_t  s2r_sum(const S2RPool *p);
+uint64_t  s2r_sum_fast(const S2RPool *p);
+uint64_t  s2r_min(const S2RPool *p);
+uint64_t  s2r_max(const S2RPool *p);
+int64_t   s2r_sum_signed(const S2RPool *p);
+int64_t   s2r_min_signed_val(const S2RPool *p);
+int64_t   s2r_max_signed_val(const S2RPool *p);
+
+/* Statistics */
+double    s2r_mean(const S2RPool *p);
+double    s2r_variance(const S2RPool *p);     /* sample variance (n-1) */
+double    s2r_stddev(const S2RPool *p);       /* + *_signed variants */
+
+/* Filters / counts */
+size_t    s2r_count_gt(const S2RPool *p, uint64_t thr);
+size_t    s2r_count_range(const S2RPool *p, uint64_t min_v, uint64_t max_v);
+uint64_t  s2r_sum_if(const S2RPool *p, uint64_t min_v, uint64_t max_v);
+int64_t   s2r_find(const S2RPool *p, uint64_t value);
+
+/* Safe / lazy-carry arithmetic */
+int       s2r_add_scalar_safe(S2RPool *p, uint64_t s);
+int       s2r_mul_scalar_safe(S2RPool *p, uint64_t s);
+void      s2r_defer_begin(S2RDeferred *d, S2RPool *p);
+void      s2r_defer_add(S2RDeferred *d, uint64_t s);
+void      s2r_defer_mul(S2RDeferred *d, uint64_t s);
+int       s2r_defer_commit(S2RDeferred *d);   /* promotes at most once */
+
+/* Analytics v2 (3.3.6) */
+S2RError  s2r_sort(S2RPool *p);
+int       s2r_is_sorted(const S2RPool *p);
+size_t    s2r_unique_sorted(S2RPool *p);
+S2RError  s2r_nunique(const S2RPool *p, size_t *out);
+S2RError  s2r_value_counts_u8(const S2RPool *p, uint64_t counts[256]);
+
+/* Block-wise width (PFOR) */
+int       s2r_blocked_build(S2RBlocked *b, const uint64_t *src, size_t n, size_t block);
+uint64_t  s2r_blocked_sum(const S2RBlocked *b);
+uint64_t  s2r_blocked_sum_fast(const S2RBlocked *b);
+size_t    s2r_blocked_bytes(const S2RBlocked *b);
+void      s2r_blocked_free(S2RBlocked *b);
+
+/* Persistence + zero-copy mmap */
+S2RError  s2r_save_portable(const S2RPool *p, const char *filename);
+S2RError  s2r_load_portable(S2RPool *p, const char *filename);
+S2RError  s2r_map_open(S2RMap *m, const char *filename, int verify_crc);
+void      s2r_map_close(S2RMap *m);
+
+/* Utilities */
+const char* s2r_strerror(S2RError err);
+uint32_t    s2r_crc32(const void *data, size_t n, uint32_t crc);
+int         s2r_has_avx2(void);
 ```
 
-### Layers
+---
 
-1. **The `.s2r` format (the contract).** A fixed 16-byte header (`magic`, `class`, `flags`, `fmt`, `count`) plus a canonical little-endian payload and a trailing `CRC32`. Fixed offsets let an mmap reader locate the payload directly. Because the contract is just bytes, ports do not need to link the C core — they re-implement reading and writing of the same bytes.
+## The `.s2r` file format
 
-2. **The C core (`include/smart2raw.h`).** Header-only and dependency-free, organized in modules:
-   * **Classification** — picks the smallest class (`u8..u64`, `i8..i64`) that preserves the real range.
-   * **`S2RPool`** — the container: data buffer, current class, count, and capacity. `push_adaptive` promotes the class in place (`u8 → u16 → u32 → u64`) without truncation; access stays native and indexed (no per-element masks/shifts).
-   * **Reductions + runtime SIMD dispatch** — `sum/min/max/count` choose an AVX2 (`vpsadbw`) or NEON path at runtime, with a scalar fallback, so the same source runs everywhere.
-   * **Analytics** — statistics, range filters, histograms, group-by, `S2RTracked` (O(1) min/max on push), and bidirectional width *healing* (shrink back when an outlier is removed).
-   * **Block-wise width (PFOR)** — `S2RBlocked` gives each block its own class so an outlier inflates only its block; signed variants and a SIMD block-sum are included.
-   * **Persistence** — portable `.s2r` I/O with CRC32, and zero-copy mmap (including a big-endian copy-on-write path that leaves the on-disk file untouched).
-   * **Build-time gates** — `S2R_NO_STDIO`, `S2R_NO_MMAP`, `S2R_NO_SIMD` strip the core down for microcontrollers (~3.4 KB) up to full server builds, from one file.
+A self-describing, portable file. All multibyte fields are **canonical little-endian**. A fixed 16-byte header lets an mmap reader locate the payload at a constant offset. Full spec: [`docs/S2R_FORMAT.md`](docs/S2R_FORMAT.md).
 
-3. **Consumers.** The **CLI** (`s2r`, `s2r_verify`, `s2r_convert`) and the **Python binding** (`ctypes` over a small stable C ABI in `s2r_capi.c`) sit directly on the C core. The **ports** (Go, JS, Python) are *independent implementations* of the format — not bindings — which is why they live under `ports/` rather than `bindings/`.
+| Offset | Size           | Field   | Meaning                                                        |
+|-------:|---------------:|---------|---------------------------------------------------------------|
+| 0      | 4              | magic   | `0x33335253` (uint32 LE; bytes `53 52 33 33`, "SR33")          |
+| 4      | 1              | size    | class as signed `int8` (negative = signed: ±8/16/32/64)        |
+| 5      | 1              | flags   | bit 0 = signed                                                 |
+| 6      | 1              | fmt     | format version (currently `1`)                                 |
+| 7      | 1              | rsvd    | reserved (`0`)                                                 |
+| 8      | 8              | count   | number of elements (uint64 LE)                                |
+| 16     | count·eb       | payload | elements in canonical LE (`eb = abs(size)/8` bytes)           |
+| 16+n   | 4              | crc32   | CRC32 (IEEE 802.3) of the payload (uint32 LE)                  |
 
-4. **Conformance.** `conformance/` holds canonical `.s2r` fixtures plus a `manifest.json` of expected values; the runner has the C tools verify/aggregate each fixture, confirms the corrupted fixture is rejected, and runs the Go/JS/Python suites against the same bytes. This is what turns "portable format" from a claim into a checked contract.
+On little-endian hosts the on-disk payload matches memory byte-for-byte (true zero-copy). On big-endian hosts, reads/writes convert, and the CRC is validated over the canonical LE bytes before any conversion.
 
-### Data flow
-
-```text
-ingest        classify + pack       -> smallest native class
-operate       in place, no decode   -> reductions/filters/analytics (SIMD per class)
-persist       portable write        -> .s2r + CRC32
-consume       mmap / scan / port    -> zero-copy reads, cross-language
-```
-
-### Key design decisions
-
-* **Format first.** Interop is a property of the bytes, not of a shared library — so any language can join by implementing the contract.
-* **Operate on the compact form.** No decompression step: the compact buffer *is* the working representation, and indexed access stays native.
-* **Capacity is in elements, storage tracks the class.** Promotion reallocates to the new width; the empty-pool path also re-fits capacity to the buffer (the fix shipped in 3.3.5).
-* **One source, many targets.** Runtime SIMD dispatch and compile-time gates let the same header serve MCUs and servers.
-* **Honest scope.** The core does storage, scanning and auxiliary reductions — never the dense matrix multiply; that boundary is deliberate and is reflected throughout the code and docs.
-
+---
 
 ## Where Smart2Raw can help
 
@@ -461,31 +581,15 @@ The canonical implementation is C. Ports exist to make the same idea useful in o
 
 ## Ports and ecosystem
 
-The canonical implementation lives in:
+The canonical implementation lives in `include/smart2raw.h`. Ports exist because each targets a real ecosystem — not to create artificial variations. They all read and write the **same** `.s2r` files.
 
-```text
-include/smart2raw.h
-```
+| Port | Path | Focus | Quickstart |
+|---|---|---|---|
+| Go | `ports/go` | services, telemetry, backends | `cd ports/go && go test ./...` |
+| JavaScript | `ports/js` | Node.js, browser demos, `.s2r` reader/writer | `cd ports/js && npm test` |
+| Python | `ports/python` | notebooks, tutorials, conformance fixtures | `cd ports/python && python -m unittest discover -s tests` |
 
-Additional ports live in:
-
-```text
-ports/
-```
-
-Current ecosystem:
-
-```text
-ports/go       -> services, telemetry and backend systems
-ports/js       -> Node.js, browser demos and .s2r readers/writers
-ports/python   -> notebooks, tutorials and conformance fixtures
-```
-
-There may also be bindings for the C core under:
-
-```text
-bindings/
-```
+C bindings for embedding the core from other languages (e.g. a Python `ctypes` wrapper) live in `bindings/`.
 
 The goal of these ports is not to create artificial variations. Each port exists for a real technical ecosystem.
 
@@ -495,9 +599,7 @@ The goal of these ports is not to create artificial variations. Each port exists
 
 The `conformance/` directory contains canonical `.s2r` fixtures and cross-language format tests.
 
-The goal is to ensure that `.s2r` is a real portable contract, not just an internal detail of the C implementation.
-
-Examples:
+The goal is to ensure that `.s2r` is a real portable contract, not just an internal detail of the C implementation. The matrix exercises every writer against every reader:
 
 ```text
 C writes           -> Go reads
@@ -508,19 +610,24 @@ JavaScript writes  -> other languages read
 Python writes      -> other languages read
 ```
 
+Regenerate fixtures and run the full check:
+
+```sh
+python3 conformance/scripts/generate_fixtures.py
+bash conformance/run_conformance.sh
+```
+
 ---
 
 ## Measured results
 
-Actual speedups depend on the hardware, compiler, data distribution, working-set size and baseline.
-
-Measured results from the project include:
+Actual speedups depend on the hardware, compiler, data distribution, working-set size and baseline. Reproduce with [`scripts/reproduce.sh`](scripts/reproduce.sh); the machine and method are recorded in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 
 | Mechanism | Measured result |
 |---|---:|
 | Memory vs `int64` for 8-16 bit data | 75-87.5% less |
 | Min/max reductions with vectorization | 8-10x |
-| SIMD `u8` sum | 2.8-10x |
+| SIMD `u8` sum (`vpsadbw`) | 2.8-10x |
 | SIMD `u16` sum | 1.4-4x |
 | 4-way histogram on skewed data | 3.6-4x |
 | `u8 -> u32` group sum | ~1.78 G rows/s |
@@ -530,7 +637,7 @@ Measured results from the project include:
 | Class-based zone-map scan | up to 94.5% bandwidth avoided in measured scenario |
 | MCU build without stdio/mmap/SIMD | ~3.4 KB |
 
-These numbers are not universal promises. They show where the mechanism works.
+These numbers are not universal promises. They show where the mechanism works. Server-capacity figures elsewhere in the project are **model estimates**, clearly labeled as such, not measurements of a real server.
 
 ---
 
@@ -581,10 +688,16 @@ bash scripts/build_and_test.sh
 Expected result:
 
 ```text
-14 suites OK, 0 failures
+15 suites OK, 0 failures
 ```
 
-Run ports:
+Build the tools and examples:
+
+```sh
+( cd tools && make ) && ( cd examples && make )
+```
+
+Run the ports:
 
 ```sh
 cd ports/go && go test ./...
@@ -598,6 +711,8 @@ Run conformance:
 bash conformance/run_conformance.sh
 ```
 
+The C suite covers functionality (all modules, PFOR, signed PFOR + SIMD, regression, backward compatibility, signed lazy-carry, big-endian COW mmap, analytics, Analytics v2) across multiple build gates: `-O3 -march=native`, `-O2`, no-SIMD (`-DS2R_NO_SIMD`), strict ISO C11 (`-pedantic`), an MCU build with no stdio/mmap/SIMD, plus emulated NEON and big-endian paths (CI repeats the ARM/BE paths on real hardware via QEMU).
+
 ---
 
 ## Repository layout
@@ -610,23 +725,26 @@ tools/
   s2r                      main CLI
   s2r_convert              converter
   s2r_verify               verifier
+  (+ Makefile)
 
 examples/
-  usage examples
+  one minimal, runnable example per use case (+ Makefile)
 
 tests/
-  C suites, regressions, analytics, mmap, SIMD and PFOR tests
+  C suites: modules, regression, analytics, mmap, SIMD, PFOR,
+  plus emulated NEON and big-endian paths
 
 benchmarks/
-  measured experiments
+  measured experiments + RESULTS.md
 
-docs/
-  whitepaper
-  .s2r format specification
-  technical documentation
+concepts/
+  the core idea in a single annotated file
+
+notebooks/
+  reproducible experiment notebooks (regenerated from gen_notebooks.py)
 
 bindings/
-  language bindings for the C core
+  language bindings for the C core (e.g. Python ctypes)
 
 ports/
   go/
@@ -637,8 +755,10 @@ conformance/
   .s2r fixtures
   cross-language format tests
 
-notebooks/
-  reproducible experiments
+docs/
+  .s2r format specification
+  Analytics v2 documentation
+  technical whitepaper (PDF)
 
 scripts/
   build, test and utility scripts
@@ -665,38 +785,36 @@ Planned or natural next steps:
 - block-wise `.s2r` serialization;
 - sub-byte experimental mode for int4-style use cases.
 
+See [`ROADMAP.md`](ROADMAP.md).
+
 ---
 
-## License
+## Editions and license
 
-Smart2Raw is licensed under:
+Smart2Raw follows an **open-core** model. The **open edition** — everything in this repository — is licensed under:
 
 ```text
 AGPL-3.0-or-later
 ```
 
-Commercial licensing may be available for proprietary, closed-source or AGPL-incompatible use.
+A **commercial license** is available for proprietary, closed-source, or AGPL-incompatible use (including closed network services).
 
 See:
 
 ```text
 LICENSE
 LICENSING.md
-NOTICE
 EDITIONS.md
+NOTICE
 ```
 
 ---
 
 ## Citation
 
-If you use Smart2Raw in research, benchmarks, papers, reports, products or technical comparisons, please cite the project using:
+If you use Smart2Raw in research, benchmarks, papers, reports, products or technical comparisons, please cite the project using [`CITATION.cff`](CITATION.cff).
 
-```text
-CITATION.cff
-```
-
-Releases can be archived on Zenodo with versioned DOIs.
+Releases are archived on Zenodo with versioned DOIs under the concept DOI [10.5281/zenodo.20477235](https://doi.org/10.5281/zenodo.20477235).
 
 ---
 

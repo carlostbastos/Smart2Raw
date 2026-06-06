@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Smart2Raw
-# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+# Copyright (C) 2026 Carlos Alberto Terencio Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Smart2Raw - build + test across all configurations.
 # Usage: scripts/build_and_test.sh   (needs gcc; the header is header-only)
-# Expected result: 14 suites OK, 0 failures.
+# Expected result: 15 suites OK, 0 failures.
 set -u
 cd "$(dirname "$0")/.."           # repository root
 INC="-I include -I tests -I tests/neon_emu"
@@ -21,11 +21,11 @@ run(){ # label ; flags... ; src(last arg)
     elif echo "$out" | grep -qE '0 FAIL|PASSED'; then
       ok "$label" "$(echo "$out"|grep -oE '[0-9]+ OK, 0 FAIL|PASSED'|tail -1)"
     else no "$label" "unexpected result"; fi
-  else no "$label" "COMPILE FAILED"; head -3 /tmp/s2r_e|sed 's/^/      /'; fi
+  else no "$label" "COMPILE FAILURE"; head -3 /tmp/s2r_e|sed 's/^/      /'; fi
 }
 echo "===== Smart2Raw v$(grep -m1 'define S2R_VERSION_STRING' $H | sed -E 's/.*"([0-9.]+)".*/\1/') - single file ($(wc -l < $H) lines) ====="
 echo "-- Functionality (server: -O3 -march=native) --"
-run "Single-file C - all modules (35)"        -O3 -march=native test_completo.c
+run "Single-file C - all modules (35)"         -O3 -march=native test_completo.c
 run "Block-wise width PFOR (11)"               -O3 -march=native test_blocked.c
 run "Signed PFOR + SIMD sum (7)"               -O3 -march=native test_blocked2.c
 run "Integrated regression (30)"               -O3 -march=native test_regressao.c
@@ -33,10 +33,11 @@ run "Backward compatibility (26)"              -O3 -march=native test_compat_ori
 run "Signed lazy-carry (11)"                   -O3 -march=native test_signed_lazy.c
 run "mmap big-endian COW (7)"                  -O3 -march=native test_be_cow.c
 run "Analytics histogram/group-by (13)"        -O3 -march=native test_analytics.c
+run "Analytics v2 sort/unique (31)"            -O3 -march=native test_analytics_v2.c
 echo "-- Adaptability (same file, different gates) --"
 run "Edge x86 -O2"                             -O2 test_regressao.c
-run "No SIMD (-DS2R_NO_SIMD)"                   -O2 -DS2R_NO_SIMD test_regressao.c
-run "Strict ISO C11 (-pedantic)"               -O2 -std=c11 -pedantic test_regressao.c
+run "No SIMD (-DS2R_NO_SIMD)"                  -O2 -DS2R_NO_SIMD test_regressao.c
+run "Strict ISO C11 (-pedantic)"              -O2 -std=c11 -pedantic test_regressao.c
 run "MCU -Os (no stdio/mmap/simd)"             -Os -DS2R_NO_STDIO -DS2R_NO_MMAP -DS2R_NO_SIMD mcu_core.c
 echo "-- Emulated hardware (real code on x86; CI repeats on real ARM/BE via QEMU) --"
 run "NEON ARM emulated (26)"                   -O2 -D__ARM_NEON=1 test_neon_emu.c

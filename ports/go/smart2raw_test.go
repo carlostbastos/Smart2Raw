@@ -1,5 +1,5 @@
 // Smart2Raw Go port tests
-// Copyright (C) 2026 Carlos Alberto Terencio de Bastos
+// Copyright (C) 2026 Carlos Alberto Terencio Bastos
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package smart2raw
@@ -212,5 +212,48 @@ func TestConformanceFixtures(t *testing.T) {
 	}
 	if _, err := Load(filepath.Join(root, "corrupted_crc.s2r")); !errors.Is(err, ErrCRCMismatch) {
 		t.Fatalf("corrupted fixture err = %v, want crc mismatch", err)
+	}
+}
+
+
+func TestAnalyticsV2SortUniqueCounts(t *testing.T) {
+	p := NewSigned()
+	for _, v := range []int64{10, -1, -128, 10, 0, -1} {
+		if err := p.PushInt(v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if p.IsSorted() {
+		t.Fatal("pool unexpectedly sorted")
+	}
+	if err := p.Sort(); err != nil {
+		t.Fatal(err)
+	}
+	if !p.IsSorted() {
+		t.Fatal("pool not sorted")
+	}
+	want := []int64{-128, -1, -1, 0, 10, 10}
+	for i, w := range want {
+		got, err := p.GetInt64(i)
+		if err != nil || got != w {
+			t.Fatalf("value[%d]=%d err=%v want %d", i, got, err, w)
+		}
+	}
+	n, err := p.NUnique()
+	if err != nil || n != 4 {
+		t.Fatalf("nunique=%d err=%v want 4", n, err)
+	}
+	counts, err := p.ValueCounts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts[-1] != 2 || counts[10] != 2 || counts[-128] != 1 {
+		t.Fatalf("bad counts: %#v", counts)
+	}
+	if err := p.UniqueSorted(); err != nil {
+		t.Fatal(err)
+	}
+	if p.Len() != 4 || p.Class() != I8 {
+		t.Fatalf("len/class = %d/%v, want 4/I8", p.Len(), p.Class())
 	}
 }

@@ -1,4 +1,4 @@
-# Build de todos os exemplos. Uso: make  (precisa de gcc)
+# Build all examples. Usage: make  (needs gcc)
 CC     ?= gcc
 CFLAGS ?= -O2 -std=c11 -pedantic -Wall -Wextra -I ../include
 SRCS    = $(wildcard *.c)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Smart2Raw
-# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+# Copyright (C) 2026 Carlos Alberto Terêncio Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Generates the Smart2Raw .ipynb notebooks (nbformat 4) with already-tested code."""
 import json, os
@@ -84,7 +84,7 @@ ax.semilogx(N, spd, "o-", color="#2E5A88", lw=2)
 for x, lab in [(48*1024,"L1 48KB"), (2*1024*1024,"L2 2MB")]:
     ax.axvline(x, color="#C2772E", ls=":")
     ax.text(x, max(spd)*0.95, lab, rotation=90, va="top", color="#C2772E", fontsize=8)
-ax.set_xlabel("N (elements; u8 array = N bytes, int64 = 8N bytes)")
+ax.set_xlabel("N (elements; array u8 = N bytes, int64 = 8N bytes)")
 ax.set_ylabel("speedup (max scan: int64 / u8)")
 ax.set_title("Cache cliff (measured on this machine)")
 ax.grid(alpha=0.3); plt.show()'''
@@ -96,9 +96,9 @@ write_nb("01_cache_cliff.ipynb", [
     code(PREAMBLE),
     md("## Measurement (compiles a C harness and sweeps N)"),
     code(cliff_measure),
-    md("## Plot"),
+    md("## Chart"),
     code(cliff_plot),
-    md("Expected: a peak in the L1/L2 window (where u8 fits and int64 doesn't) and a lower plateau in RAM. "
+    md("Expected: a peak in the L1/L2 window (where u8 fits and int64 does not) and a smaller plateau in RAM. "
        "Honest note: this holds for scans (max/min/count); the *naive* byte sum only "
        "gains with the SIMD kernel `vpsadbw` (see `sum_fast`)."),
 ])
@@ -122,25 +122,25 @@ int main(int argc,char**argv){
 pfor_measure = 'SRC = r"""' + C_PFOR + '"""\n\n' + r'''ppms = [0,10,50,100,200,500,1000,2000,5000,10000]   # parts per million of outliers
 rows = [list(map(float, o.split())) for o in compile_run(SRC, [[p] for p in ppms])]
 ppm = [r[0] for r in rows]
-ratio = [ (r[1]/r[2]) if r[2] else 1.0 for r in rows ]  # single width / per block
+ratio = [ (r[1]/r[2]) if r[2] else 1.0 for r in rows ]  # single width / block-wise
 for p,r in zip(ppm,ratio): print(f"{p/1e4:5.2f}% outliers  ->  {r:4.2f}x memory recovered")'''
 
 pfor_plot = r'''fig, ax = plt.subplots(figsize=(9,4))
 ax.plot([p/1e4 for p in ppm], ratio, "o-", color="#2E7D5B", lw=2)
 ax.axhline(1.0, color="#888", ls=":")
-ax.set_xlabel("% outliers"); ax.set_ylabel("memory: single width / per block")
+ax.set_xlabel("% outliers"); ax.set_ylabel("memory: single_w width / per block")
 ax.set_title("PFOR: memory recovery vs outlier fraction (measured)")
 ax.grid(alpha=0.3); plt.show()'''
 
 write_nb("02_pfor.ipynb", [
     md("# 02 - Block-wise width (PFOR)\n\nAn outlier inflates only its own block. Here we measure the memory of the "
-       "block-wise width vs the safe single width, varying the outlier fraction. Uses the real `S2RBlocked` type."),
+       "block-wise width vs the safe single_w width, varying the outlier fraction. Uses the real `S2RBlocked` type."),
     code(PREAMBLE),
     md("## Measurement"),
     code(pfor_measure),
-    md("## Plot"),
+    md("## Chart"),
     code(pfor_plot),
-    md("Expected: ~3.7x when outliers are rare (0.01%) and a gradual decline as they multiply "
+    md("Expected: ~3.7x when outliers are rare (0.01%) and a gradual drop as they multiply "
        "(more blocks need the wide class). On clean data, ~1x (no harm)."),
 ])
 
@@ -148,7 +148,7 @@ write_nb("02_pfor.ipynb", [
 zone_code = r'''import matplotlib.pyplot as plt
 
 # "Free" zone-map model: each column carries 1 class byte (range bound).
-# A query for a large value skips columns whose class cannot reach that value,
+# A query for a large value skips columns whose class can't reach that value,
 # reading ONLY the class bytes (metadata), without touching the payload.
 NCOLS = 2000
 ROWS_PER_COL = 100_000      # payload per column (elements)
@@ -158,7 +158,7 @@ def simulate(frac_wide):
     # 'frac_wide' of the columns are u32 (may hold large values); the rest, u8.
     wide = int(NCOLS * frac_wide)
     cols = [32]*wide + [8]*(NCOLS-wide)
-    V = 1000          # query: "are there values >= 1000?" (only u32 columns qualify)
+    V = 1000          # query: "any values >= 1000?" (only u32 columns qualify)
     must_scan = [c for c in cols if class_bound[c] >= V]
     skipped = NCOLS - len(must_scan)
     meta_bytes = NCOLS                      # 1 class byte per column
@@ -184,7 +184,7 @@ write_nb("03_zonemap.ipynb", [
        "A query for a value that only fits in wide columns skips the narrow ones, reading **only the class "
        "bytes**. Deterministic model (no timing noise)."),
     code(zone_code),
-    md("Reproduces the whitepaper's order of magnitude: a few metadata bytes skip the vast majority of "
+    md("Reproduces the whitepaper order of magnitude: a few metadata bytes skip the vast majority of "
        "columns and avoid almost all the read bandwidth."),
 ])
 
@@ -206,28 +206,28 @@ int main(int argc,char**argv){
 ai_measure = 'SRC = r"""' + C_AI + '"""\n\n' + r'''pcts = [0,0.5,1.0,1.5,2.0,3.0]
 rows = [list(map(float, o.split())) for o in compile_run(SRC, [[p] for p in pcts])]
 meas   = [r[0] for r in rows]            # measured % of outlier channels
-r_chan = [r[1]/r[2] for r in rows]       # uniform-u16 / per channel (localized outlier)
-r_tok  = [r[1]/r[3] for r in rows]       # uniform-u16 / per token (spread-out outlier)
+r_chan = [r[1]/r[2] for r in rows]       # uniform u16 / per channel (localized outlier)
+r_tok  = [r[1]/r[3] for r in rows]       # uniform u16 / per token (spread outlier)
 for m,a,b in zip(meas,r_chan,r_tok): print(f"{m:4.1f}% outliers  per-channel={a:4.2f}x  per-token={b:4.2f}x")'''
 
 ai_plot = r'''fig, ax = plt.subplots(figsize=(9,4))
 ax.plot(meas, r_chan, "o-", color="#2E7D5B", lw=2, label="per channel (localized outlier)")
-ax.plot(meas, r_tok,  "s--", color="#C2772E", lw=2, label="per token (spread-out outlier)")
+ax.plot(meas, r_tok,  "s--", color="#C2772E", lw=2, label="per token (spread outlier)")
 ax.axhline(1.0, color="#888", ls=":")
-ax.set_xlabel("% outlier channels"); ax.set_ylabel("memory: uniform-u16 / per block")
+ax.set_xlabel("% outlier channels"); ax.set_ylabel("memory: uniform u16 / per block")
 ax.set_title("AI: block-wise width; layout decides the gain (measured)")
 ax.legend(); ax.grid(alpha=0.3); plt.show()'''
 
 write_nb("04_ai_blocked.ipynb", [
-    md("# 04 - Block-wise width in AI\n\nQuantized activations with outlier channels. **Layout decides the gain**: "
+    md("# 04 - Block-wise width in AI\n\nQuantized activation with outlier channels. **Layout decides the gain**: "
        "per channel (outlier localized in one block) recovers ~2x vs the safe uniform-u16 width; per token "
-       "(outlier spread across all blocks) stays ~1x. Honest ruler: byte-granular does not beat flat int8."),
+       "(outlier spread across all blocks) stays ~1x. Honest yardstick: byte-granular does not beat flat int8."),
     code(PREAMBLE),
     md("## Measurement"),
     code(ai_measure),
-    md("## Plot"),
+    md("## Chart"),
     code(ai_plot),
-    md("The gap between the two curves is the key point: to gain in AI, the outliers must be "
+    md("The separation between the two curves is the key point: to gain in AI, the outliers must be "
        "localized in memory (per-channel/per-token layout)."),
 ])
 
@@ -246,7 +246,7 @@ for r, c in [(4,"#2E5A88"),(8,"#2E7D5B"),(16,"#C2772E")]:
     ax.plot(f*100, multiplier(f, r), color=c, lw=2, label=f"reduction {r}x")
 ax.set_xlabel("% of resident memory in the qualifying profile (f)")
 ax.set_ylabel("capacity multiplier (same hardware)")
-ax.set_title("How much more data fits on the SAME server (model estimate)")
+ax.set_title("How much more data fits in the SAME server (model estimate)")
 ax.legend(); ax.grid(alpha=0.3); plt.show()
 
 print("Table (multiplier | memory freed):")
@@ -256,12 +256,12 @@ for ff in [0.2,0.4,0.6,0.8]:
           f"{multiplier(ff,8):>5.2f}x ({freed(ff,8)*100:4.1f}%)")'''
 
 write_nb("05_capacity_model.ipynb", [
-    md("# 05 - Server capacity model\n\n**An estimate, not a measurement.** Translates the per-workload gain into "
+    md("# 05 - Server capacity model\n\n**Estimate, not a measurement.** Translates the per-workload gain into "
        "capacity on the same hardware. Depends on `f` (fraction of RAM in the qualifying profile) and `r` (reduction). "
-       "Applies to the CPU/storage/telemetry tier; **not** to the training/inference GPU."),
+       "Applies to the CPU/storage/telemetry ring; **not** to the training/inference GPU."),
     code(cap_code),
-    md("For a concrete workload, estimate `f` (how much of the RAM is small-range integers) and `r` (the reduction "
-       "measured in the previous notebooks) and read off the multiplier / memory freed."),
+    md("For a concrete workload, estimate `f` (how much of RAM is small-range integers) and `r` (the reduction "
+       "measured in the earlier notebooks) and read the multiplier / memory freed."),
 ])
 
 print("\nAll notebooks generated.")

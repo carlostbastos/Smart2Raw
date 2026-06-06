@@ -1,17 +1,17 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /*
- * test_completo.c - Single, complete test of Smart2Raw v3.3.5
+ * test_completo.c - Single, complete test for Smart2Raw v3.3.6
  * ===========================================================
  *
- * Exercises ALL the library modules in a single file, with one assertion
+ * Exercises ALL library modules in a single file, with one assertion
  * per behavior. The sections follow the header's own order.
  *
- * Build (server):    gcc -O3 -march=native -o tc test_completo.c && ./tc
- * Adaptable:          -O2 | -O2 -DS2R_NO_SIMD | -std=c11 -pedantic
+ * Build (servidor):  gcc -O3 -march=native -o tc test_completo.c && ./tc
+ * Adaptavel:         -O2 | -O2 -DS2R_NO_SIMD | -std=c11 -pedantic
  * File/mmap sections only compile when S2R_HAS_STDIO / S2R_HAS_MMAP.
  */
 #include <stdio.h>
@@ -24,23 +24,23 @@ static int g_ok = 0, g_fail = 0;
 } while (0)
 
 int main(void) {
-    printf("=== Smart2Raw v%s - full test ===\n", S2R_VERSION_STRING);
+    printf("=== Smart2Raw v%s - complete test ===\n", S2R_VERSION_STRING);
 
     /* ----------------------------------------------------------------
-     * 1) NUCLEO + PUSH AUTO-ADAPTATIVO (a classe cresce, nunca trunca)
+     * 1) CORE + AUTO-ADAPTIVE PUSH (the class grows, never truncates)
      * ---------------------------------------------------------------- */
     {
         S2RPool p; CHECK(s2r_pool_init(&p, S2R_8, 4), "pool_init");
         uint64_t vals[] = { 25, 30, 40, 1000, 70000, 5000000000ULL };
         for (unsigned i = 0; i < 6; i++) s2r_push_adaptive(&p, vals[i]);
-        CHECK(p.count == 6, "count apos 6 pushes");
-        CHECK(p.size == 64, "class grew u8 -> u64 (5e9 doesn't fit in 32 bits)");
+        CHECK(p.count == 6, "count after 6 pushes");
+        CHECK(p.size == 64, "class grew u8 -> u64 (5e9 does not fit in 32 bits)");
         CHECK(s2r_sum(&p) == 5000071095ULL, "exact sum after growing the class");
         s2r_pool_free(&p);
     }
 
     /* ----------------------------------------------------------------
-     * 2) ACESSO TIPADO DIRETO (set/get round-trip em varias classes)
+     * 2) DIRECT TYPED ACCESS (set/get round-trip across several classes)
      * ---------------------------------------------------------------- */
     {
         S2RPool p; s2r_pool_init(&p, S2R_16, 3);
@@ -52,7 +52,7 @@ int main(void) {
     }
 
     /* ----------------------------------------------------------------
-     * 3) AGREGACOES (unsigned) + SIMD: sum_fast deve bater com sum
+     * 3) AGGREGATIONS (unsigned) + SIMD: sum_fast must match sum
      * ---------------------------------------------------------------- */
     {
         S2RPool p; s2r_pool_init(&p, S2R_8, 1000);
@@ -65,8 +65,8 @@ int main(void) {
     }
 
     /* ----------------------------------------------------------------
-     * 4) SIGNED-AWARE: pool com sinal e negativos -> stats corretas
-     *    (the non-_signed path would read the bytes as unsigned: wrong)
+     * 4) SIGNED-AWARE: signed pool with negatives -> correct stats
+     *    (the path without _signed would read bytes as unsigned: wrong)
      * ---------------------------------------------------------------- */
     {
         S2RPool p; s2r_pool_init(&p, S2R_I8, 5);
@@ -74,14 +74,14 @@ int main(void) {
         for (int i = 0; i < 5; i++) s2r_push_signed_adaptive(&p, vals[i]);
         CHECK(s2r_min_signed_val(&p) == -100, "signed min = -100");
         CHECK(s2r_max_signed_val(&p) ==  100, "signed max = +100");
-        /* media 0; variancia AMOSTRAL (n-1) = 25000/4 = 6250; desvio = sqrt(6250) */
+        /* mean 0; SAMPLE variance (n-1) = 25000/4 = 6250; stddev = sqrt(6250) */
         CHECK((s2r_variance_signed(&p) > 6249.999 && s2r_variance_signed(&p) < 6250.001), "signed variance (sample) = 6250");
         CHECK((s2r_stddev_signed(&p) > 79.055 && s2r_stddev_signed(&p) < 79.058), "signed stddev ~ 79.06");
         s2r_pool_free(&p);
     }
 
     /* ----------------------------------------------------------------
-     * 5) FILTROS / CONTAGENS por faixa
+     * 5) FILTERS / COUNTS by range
      * ---------------------------------------------------------------- */
     {
         S2RPool p; s2r_pool_init(&p, S2R_8, 10);
@@ -94,15 +94,15 @@ int main(void) {
     }
 
     /* ----------------------------------------------------------------
-     * 6) ARITMETICA + LAZY-CARRY (sem e COM sinal)
+     * 6) ARITHMETIC + LAZY-CARRY (unsigned and SIGNED)
      * ---------------------------------------------------------------- */
     {
-        /* (a) unsigned lazy-carry: adding overflows u8 -> promotes by itself */
+        /* (a) unsigned lazy-carry: the sum overflows u8 -> auto-promotes */
         S2RPool p; s2r_pool_init(&p, S2R_8, 2);
         s2r_push(&p, 250); s2r_push(&p, 200);
-        s2r_add_scalar_safe(&p, 60);          /* 250+60=310 doesn't fit in u8 */
+        s2r_add_scalar_safe(&p, 60);          /* 250+60=310 does not fit in u8 */
         CHECK(p.size == 16, "lazy-carry: u8 -> u16 ao inves de wrap");
-        CHECK(s2r_get(&p, 0) == 310 && s2r_get(&p, 1) == 260, "correct values post-promotion");
+        CHECK(s2r_get(&p, 0) == 310 && s2r_get(&p, 1) == 260, "correct values after promotion");
         s2r_pool_free(&p);
 
         /* (b) SIGNED lazy-carry, deferred session: 1 promotion for the chain */
@@ -115,12 +115,12 @@ int main(void) {
         int ok = s2r_defer_signed_commit(&d);
         CHECK(ok && q.size == S2R_I32, "deferred: I8 -> I32 in a single promotion");
         CHECK(s2r_get_signed(&q, 0) == 125000 && s2r_get_signed(&q, 1) == 150000,
-              "deferida aplicou as operacoes (valores corretos)");
+              "deferred applied the operations (correct values)");
         s2r_pool_free(&q);
     }
 
     /* ----------------------------------------------------------------
-     * 7) SERIALIZACAO PORTAVEL (LE canonico + CRC32) - round-trip
+     * 7) PORTABLE SERIALIZATION (canonical LE + CRC32) - round-trip
      * ---------------------------------------------------------------- */
 #if S2R_HAS_STDIO
     {
@@ -131,20 +131,20 @@ int main(void) {
         CHECK(s2r_load_portable(&b, "tc.s2r") == S2R_OK, "load_portable (CRC valida)");
         int eq = (b.count == a.count && b.size == a.size);
         for (size_t i = 0; eq && i < a.count; i++) eq = (s2r_get(&b, i) == s2r_get(&a, i));
-        CHECK(eq, "identical round-trip (disk -> memory)");
+        CHECK(eq, "round-trip identical (disk -> memory)");
         s2r_pool_free(&b);
 
     /* ----------------------------------------------------------------
-     * 8) mmap ZERO-COPY: opera sobre o arquivo sem copiar p/ a RAM
+     * 8) ZERO-COPY mmap: operates on the file without copying to RAM
      * ---------------------------------------------------------------- */
 #if S2R_HAS_MMAP
         {
             S2RMap m;
-            CHECK(s2r_map_open(&m, "tc.s2r", 1) == S2R_OK, "map_open (verifica CRC)");
+            CHECK(s2r_map_open(&m, "tc.s2r", 1) == S2R_OK, "map_open (checks CRC)");
             int meq = (m.pool.count == a.count);
             for (size_t i = 0; meq && i < a.count; i++) meq = (s2r_get(&m.pool, i) == s2r_get(&a, i));
             CHECK(meq, "zero-copy read matches the original");
-            CHECK(s2r_sum_fast(&m.pool) == s2r_sum(&a), "aggregation runs directly on the mapping");
+            CHECK(s2r_sum_fast(&m.pool) == s2r_sum(&a), "agregacao roda direto no mapeamento");
             s2r_map_close(&m);
         }
 #endif
@@ -154,28 +154,28 @@ int main(void) {
 #endif
 
     /* ----------------------------------------------------------------
-     * 9) ANALYTICS: largura bidirecional (auto-cura), tracked, group-by
+     * 9) ANALYTICS: bidirectional width (self-healing), tracked, group-by
      * ---------------------------------------------------------------- */
     {
-        /* (a) self-healing: an outlier promotes to u32; once removed, fit_class lowers it */
+        /* (a) self-healing: an outlier promotes to u32; removed, fit_class demotes */
         S2RPool p; s2r_pool_init(&p, S2R_8, 8);
         for (int i = 0; i < 7; i++) s2r_push_adaptive(&p, (uint64_t)(i + 1));   /* 1..7, u8 */
         s2r_push_adaptive(&p, 5000000ULL);                                       /* outlier -> u32 */
-        CHECK(p.size == 32, "outlier promoted u8 -> u32");
+        CHECK(p.size == 32, "outlier promoveu u8 -> u32");
         s2r_remove_swap(&p, p.count - 1);                                        /* remove the outlier */
-        s2r_fit_class(&p);                                                       /* auto-cura */
-        CHECK(p.size == 8, "fit_class lowered u32 -> u8 after removing the outlier");
-        CHECK(s2r_sum(&p) == 1+2+3+4+5+6+7, "dados intactos apos a cura");
+        s2r_fit_class(&p);                                                       /* self-healing */
+        CHECK(p.size == 8, "fit_class demoted u32 -> u8 after removing the outlier");
+        CHECK(s2r_sum(&p) == 1+2+3+4+5+6+7, "data intact after healing");
         s2r_pool_free(&p);
 
-        /* (b) S2RTracked: min/max em O(1) batem com o rescan */
+        /* (b) S2RTracked: O(1) min/max match the rescan */
         S2RTracked t; s2r_tracked_init(&t, S2R_8, 8);
         for (int i = 0; i < 100; i++) s2r_tracked_push(&t, (uint64_t)((i * 37) % 200));
         uint64_t mn, mx; s2r_tracked_range(&t, &mn, &mx);
         CHECK(mn == s2r_min(&t.p) && mx == s2r_max(&t.p), "tracked range O(1) == rescan");
         s2r_tracked_free(&t);
 
-        /* (c) group-by on the compact form: histogram and sum per group */
+        /* (c) group-by on the compact data: histogram and per-group sum */
         S2RPool keys; s2r_pool_init(&keys, S2R_8, 8);
         S2RPool vals; s2r_pool_init(&vals, S2R_32, 8);
         uint8_t  k[] = { 1, 2, 1, 3, 2, 1 };
@@ -204,7 +204,7 @@ int main(void) {
         int rt = 1; for (int i = 0; i < N; i++) if (s2r_blocked_get(&b, i) != a[i]) { rt = 0; break; }
         CHECK(rt, "blocked: get(i) == src[i]");
         CHECK(s2r_blocked_sum(&b) == s, "blocked: exact sum with outlier");
-        /* single width would be u32 (4 bytes); block-wise uses much less */
+        /* a single width would be u32 (4 bytes); block-wise uses much less */
         CHECK(s2r_blocked_bytes(&b) < (size_t)4 * N / 2, "blocked: <50% of the single width");
         s2r_blocked_free(&b);
     }

@@ -1,13 +1,13 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /*
  * Smart2Raw v3.2.0 - Test Suite
  * =============================
  * 
- * Tests all the new and fixed features:
+ * Tests all new and fixed features:
  * - s2r_push_checked / s2r_push_saturate
  * - Signed integers (S2R_I8, I16, I32, I64)
  * - s2r_promote / s2r_demote
@@ -783,16 +783,16 @@ int main(void) {
     
     printf("\n");
     printf(ANSI_BLUE "╔══════════════════════════════════════════════════════════════╗\n" ANSI_RESET);
-    printf(ANSI_BLUE "║                         FINAL RESULT                         ║\n" ANSI_RESET);
+    printf(ANSI_BLUE "║                      FINAL RESULT                         ║\n" ANSI_RESET);
     printf(ANSI_BLUE "╠══════════════════════════════════════════════════════════════╣\n" ANSI_RESET);
-    printf("║  Tests passed: " ANSI_GREEN "%3d" ANSI_RESET "                                           ║\n", tests_passed);
-    printf("║  Tests failed: " ANSI_RED "%3d" ANSI_RESET "                                           ║\n", tests_failed);
+    printf("║  Tests passed:    " ANSI_GREEN "%3d" ANSI_RESET "                                        ║\n", tests_passed);
+    printf("║  Tests failed:    " ANSI_RED "%3d" ANSI_RESET "                                        ║\n", tests_failed);
     printf(ANSI_BLUE "╠══════════════════════════════════════════════════════════════╣\n" ANSI_RESET);
     
     if (tests_failed == 0) {
         printf("║  " ANSI_GREEN "STATUS: PASSED - Smart2Raw v3.2.0 working!" ANSI_RESET "                ║\n");
     } else {
-        printf("║  " ANSI_RED "STATUS: FAILED - failures to fix" ANSI_RESET "                         ║\n");
+        printf("║  " ANSI_RED "STATUS: FAILED - there are failures to fix" ANSI_RESET "               ║\n");
     }
     
     printf(ANSI_BLUE "╚══════════════════════════════════════════════════════════════╝\n" ANSI_RESET);

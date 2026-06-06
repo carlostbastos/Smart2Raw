@@ -1,6 +1,6 @@
 /*
  * Smart2Raw JavaScript port tests
- * Copyright (C) 2026 Carlos Alberto Terencio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terencio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -81,4 +81,21 @@ test('loads canonical conformance fixtures', () => {
   }
   const corrupted = readFileSync(resolve(root, 'corrupted_crc.s2r'));
   assert.throws(() => Smart2RawPool.fromS2RBytes(corrupted), /crc mismatch/);
+});
+
+
+test('analytics v2: sort, unique and value counts', () => {
+  const p = new Smart2RawPool({ signed: true });
+  p.pushMany([10, -1, -128, 10, 0, -1]);
+  assert.equal(p.isSorted(), false);
+  p.sort();
+  assert.equal(p.isSorted(), true);
+  assert.deepEqual(p.toArray(), [-128n, -1n, -1n, 0n, 10n, 10n]);
+  assert.equal(p.nUnique(), 4);
+  const counts = p.valueCounts();
+  assert.equal(counts.get('-1'), 2n);
+  assert.equal(counts.get('10'), 2n);
+  p.uniqueSorted();
+  assert.deepEqual(p.toArray(), [-128n, -1n, 0n, 10n]);
+  assert.equal(p.size, -8);
 });

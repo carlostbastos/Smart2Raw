@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Smart2Raw
-# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+# Copyright (C) 2026 Carlos Alberto Terêncio Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Updates the LICENSE file with the verbatim AGPL-3.0 text from gnu.org.
 set -e

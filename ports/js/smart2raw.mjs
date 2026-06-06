@@ -1,6 +1,6 @@
 /*
  * Smart2Raw JavaScript port
- * Copyright (C) 2026 Carlos Alberto Terencio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terencio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -205,6 +205,42 @@ export class Smart2RawPool {
     }
     this.size = classifyRange(this.min(), this.max(), this.signed);
     return this;
+  }
+
+
+  sort() {
+    this.values.sort((a, b) => a < b ? -1 : (a > b ? 1 : 0));
+    return this;
+  }
+
+  isSorted() {
+    for (let i = 1; i < this.values.length; i++) {
+      if (this.values[i - 1] > this.values[i]) return false;
+    }
+    return true;
+  }
+
+  uniqueSorted() {
+    if (this.values.length < 2) return this;
+    const out = [this.values[0]];
+    for (let i = 1; i < this.values.length; i++) {
+      if (this.values[i] !== out[out.length - 1]) out.push(this.values[i]);
+    }
+    this.values = out;
+    return this.fitClass();
+  }
+
+  nUnique() {
+    return new Set(this.values.map(v => v.toString())).size;
+  }
+
+  valueCounts() {
+    const counts = new Map();
+    for (const value of this.values) {
+      const key = value.toString();
+      counts.set(key, (counts.get(key) ?? 0n) + 1n);
+    }
+    return counts;
   }
 
   toArray() {

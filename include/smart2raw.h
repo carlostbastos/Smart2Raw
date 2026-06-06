@@ -1,14 +1,14 @@
 /*
- * Smart2Raw v3.3.5 - Self-adaptive numeric storage (header-only)
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Smart2Raw v3.3.6 - Adaptive numeric storage (header-only)
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  * =======================================================================
  *
- * A SINGLE-FILE C library, zero external dependencies. Stores integer arrays
- * in the SMALLEST native class that fits the real range (signed/unsigned
- * +-8/16/32/64 bits) and operates directly on the compact form.
+ * A SINGLE-FILE C library with zero external dependencies. It stores
+ * integer arrays in the SMALLEST native class that fits the real range
+ * (+-8/16/32/64 bits, signed or unsigned) and operates directly on the compact format.
  *
- * Principle: classify once, always operate on the most compact form.
+ * Principle: classify once, always operate in the most compact format.
  *
  * --- CONTENTS (sections of this file, in order) ---
  *   VERSION  ·  CONFIGURATION  ·  ENDIANNESS  ·  PLATFORM/FEATURE DETECTION
@@ -16,58 +16,60 @@
  *   CLASSIFICATION  ·  POOL MANAGEMENT  ·  TYPED ACCESS  ·  PUSH VARIANTS
  *   CLASS PROMOTION/DEMOTION  ·  AGGREGATIONS  ·  STATISTICS
  *   SIGNED-AWARE AGGREGATIONS/FILTERS/STATS  ·  FILTERS AND COUNTS
- *   ARITHMETIC (includes signed/unsigned lazy-carry)  ·  BITWISE
+ *   ARITHMETIC (includes lazy-carry, unsigned/SIGNED)  ·  BITWISE
  *   STREAMING/CONVERSION  ·  UTILITY  ·  DIAGNOSTICS  ·  ITERATOR MACRO
- *   SERIALIZATION (canonical LE + CRC32)  ·  zero-copy mmap (COW big-endian)
- *   SIMD (runtime dispatch: AVX2 vpsadbw / NEON)  ·  ERROR HANDLING
- *   ANALYTICS MODULE: bidirectional width (self-healing), S2RTracked, group-by
+ *   SERIALIZATION (LE canonico + CRC32)  ·  mmap zero-copy (COW big-endian)
+ *   SIMD (dispatch em runtime: AVX2 vpsadbw / NEON)  ·  ERROR HANDLING
+ *   ANALYTICS MODULE: bidirectional width (self-healing), S2RTracked,
+ *   group-by, sort, unique, nunique and value_counts
  *   BLOCK-WISE WIDTH MODULE (PFOR): S2RBlocked - per-block class
  *
- * --- ADAPTABILITY (compile-time gates) ---
+ * --- ADAPTABILIDADE (gates de compilacao) ---
  *   -DS2R_NO_STDIO   removes file serialization
  *   -DS2R_NO_MMAP    removes memory mapping
  *   -DS2R_NO_SIMD    removes SIMD dispatch (uses the scalar path)
  *   MCU footprint (all gates on): ~3.4 KB of code.
  *
- * --- CHANGELOG (mais recente primeiro) ---
- * v3.3.5: fix - class promotion on an empty pool (count==0) did not re-fit the
- *         capacity to the already-allocated buffer (could overflow if the first
- *         value required a wider class). Found with ASan; regression test added.
- * v3.3.4: signed PFOR (s2r_blocked_build/get/sum_signed) and SIMD-accelerated
- *         block sum (s2r_blocked_sum_fast: each block reuses the vpsadbw/NEON
- *         dispatch in its own native type).
- * v3.3.3: block-wise width (PFOR) - S2RBlocked: each block picks its own class;
- *         an outlier inflates only its own block (recovers ~3.7x of memory under
- *         localized outliers). API: s2r_blocked_build/get/sum/max/bytes/free.
- *         Scope: unsigned.
+ * --- CHANGELOG (most recent first) ---
+ * v3.3.6: Analytics v2 - sort/is_sorted, unique_sorted, nunique e
+ *         value_counts for compact integer arrays.
+ * v3.3.5: fix - class promotion with an empty pool (count==0) did not
+ *         readjust capacity to the already-allocated buffer (could overflow if the
+ *         first value required a larger class). Found via ASan; regression test added.
+ * v3.3.4: signed PFOR (s2r_blocked_build/get/sum_signed) and block-wise sum
+ *         accelerated by SIMD (s2r_blocked_sum_fast: each block reuses the
+ *         vpsadbw/NEON dispatch in its own native type).
+ * v3.3.3: block-wise width (PFOR) - S2RBlocked: each block chooses its
+ *         class; an outlier inflates only its own block (recovers ~3.7x
+ *         memory under localized outliers). API: s2r_blocked_build/get/
+ *         sum/max/bytes/free. Scope: unsigned.
  * v3.3.2: Analytics module merged into the single header - bidirectional width
- *         (s2r_remove_swap, s2r_fit_class/self-healing), S2RTracked (O(1) min/max
- *         on push) and group-by on the compact form (s2r_histogram_u8,
+ *         (s2r_remove_swap, s2r_fit_class/self-healing), S2RTracked (min/max in
+ *         O(1) on push) and group-by on the compact data (s2r_histogram_u8,
  *         s2r_group_sum_u8u32).
  * v3.3.1: SIGNED lazy-carry arithmetic (s2r_add/mul_scalar_signed_safe,
  *         S2RDeferredSigned); NEON path (ARM); big-endian mmap via
- *         copy-on-write (on-disk file untouched).
- * v3.3.0: self-adaptive push (s2r_push_adaptive); SIMD with runtime dispatch
- *         (AVX2 vpsadbw, scalar fallback; s2r_sum_fast); zero-copy mmap
- *         (s2r_map_open/close); portable I/O (canonical LE + CRC32).
- * v3.2.1: s2r_stddev() fixed (robust s2r_sqrt, no math.h); aligned allocation
- *         via aligned_alloc (C11); SIGNED-AWARE aggregations/filters/statistics
- *         (the non-_signed versions read bytes as unsigned and gave wrong
- *         results on signed pools).
+ *         copy-on-write (on-disk file left intact).
+ * v3.3.0: auto-adaptive push (s2r_push_adaptive); SIMD with dispatch at
+ *         runtime (AVX2 vpsadbw, scalar fallback; s2r_sum_fast); mmap
+ *         zero-copy (s2r_map_open/close); portable I/O (canonical LE + CRC32).
+ * v3.2.1: s2r_stddev() fixed (robust s2r_sqrt, no math.h); aligned
+ *         allocation via aligned_alloc (C11); aggregations/filters/statistics
+ *         made SIGNED-AWARE (the versions without _signed read bytes as unsigned and
+ *         returned wrong results on signed pools).
  * v3.2.0: signed integers (S2R_I8..I64); promote/demote; statistics;
  *         range queries; push_many/transform; S2R_FOREACH; s2r_info.
  *
- * Honest note: locally, the NEON and big-endian paths are exercised in an
- * ACLE-faithful EMULATED environment (the real code runs on x86). CI also runs
- * the test suite on real linux/arm64 (NEON) and real linux/s390x (big-endian)
- * via QEMU.
+ * Nota honesta: os caminhos NEON e big-endian sao validados em ambiente
+ * EMULATED faithfully to ACLE (they exercise the real code on x86), not on physical silicon.
+ * A final build on real ARM and, ideally, on a big-endian host is recommended.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  * Dual-licensed: AGPL-3.0-or-later OR commercial. See LICENSING.md.
  */
 
-#ifndef SMART2RAW_V3_3_5_H
-#define SMART2RAW_V3_3_5_H
+#ifndef SMART2RAW_V3_3_6_H
+#define SMART2RAW_V3_3_6_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -85,8 +87,8 @@ extern "C" {
 
 #define S2R_VERSION_MAJOR 3
 #define S2R_VERSION_MINOR 3
-#define S2R_VERSION_PATCH 5
-#define S2R_VERSION_STRING "3.3.5"
+#define S2R_VERSION_PATCH 6
+#define S2R_VERSION_STRING "3.3.6"
 
 /* ============================================================================
  * CONFIGURATION
@@ -142,8 +144,8 @@ extern "C" {
 /* ============================================================================
  * PLATFORM / FEATURE DETECTION (NEW in v3.3)
  * ----------------------------------------------------------------------------
- * Allows lean builds for edge/MCU: define S2R_NO_STDIO (no files) and/or
- * S2R_NO_SIMD (no SIMD dispatch). mmap on POSIX only.
+ * Enables lean builds for edge/MCU: define S2R_NO_STDIO (no files)
+ * and/or S2R_NO_SIMD (no SIMD dispatch). mmap on POSIX only.
  * ============================================================================ */
 
 #ifndef S2R_NO_STDIO
@@ -260,8 +262,8 @@ typedef struct {
   }
 #elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__APPLE__)
   /* C11 aligned_alloc: declared by <stdlib.h> with no feature-test macro,
-   * compiles cleanly under strict -std=c11. Requires size to be a multiple of
-   * align, which this library always guarantees (s2r_align_up to S2R_ALIGNMENT). */
+   * compiles cleanly under strict -std=c11. Requires size to be a multiple of align,
+   * which this library always guarantees (s2r_align_up for S2R_ALIGNMENT). */
   static inline void* s2r_aligned_alloc_impl(size_t align, size_t size) {
       if (align < sizeof(void*)) align = sizeof(void*);
       size = (size + align - 1) & ~(size_t)(align - 1); /* defensivo */
@@ -588,9 +590,9 @@ static inline int s2r_push(S2RPool *p, uint64_t v) {
     return 1;
 }
 
-/* Empty pool: when the class changes, reinterpret the capacity (in elements)
- * for the ALREADY-allocated buffer, avoiding overflow when the first value
- * requires a wider class than the initial one. (fixes the count==0 promotion bug) */
+/* Empty pool: when switching class, reinterpret the capacity (in elements)
+ * for the ALREADY-allocated buffer, avoiding overflow when the first value needs a
+ * class larger than the initial one. (fixes the promotion bug with count==0) */
 static inline void s2r__recap_empty(S2RPool *p){
     size_t eb = s2r_abs_size(p->size)/8;
     p->capacity = (eb && p->byte_cap) ? (p->byte_cap/eb) : 0;
@@ -941,16 +943,16 @@ static inline double s2r_variance(const S2RPool *p) {
     return sum_sq / (double)(n - 1);  /* Sample variance */
 }
 
-/* Square root with no math.h dependency.
- * Normalizes v to [0.25, 4) by powers of 4 (exact scaling in binary), runs
- * Newton-Raphson (quadratic convergence in that interval) and rescales.
- * Robust over the full double range, including very large variances. */
+/* Square root with no dependency on math.h.
+ * Normalizes v to [0.25, 4) by powers of 4 (exact scaling in binary),
+ * runs Newton-Raphson (quadratic convergence in that interval) and rescales.
+ * Robust across the whole double range, including very large variances. */
 static inline double s2r_sqrt(double v) {
     if (v <= 0.0) return 0.0;
     double scale = 1.0;
     while (v >= 4.0)  { v *= 0.25; scale *= 2.0; }
     while (v < 0.25)  { v *= 4.0;  scale *= 0.5; }
-    double x = (v + 1.0) * 0.5;  /* seed em [~0.31, 2.5) */
+    double x = (v + 1.0) * 0.5;  /* seed in [~0.31, 2.5) */
     for (int i = 0; i < 8; i++) x = 0.5 * (x + v / x);
     return x * scale;
 }
@@ -962,7 +964,7 @@ static inline double s2r_stddev(const S2RPool *p) {
 /* ============================================================================
  * SIGNED-AWARE AGGREGATIONS / FILTERS / STATS (NEW in v3.2.1)
  * ----------------------------------------------------------------------------
- * The non-suffixed versions (_signed) read the bytes as UNSIGNED and give
+ * The versions without the (_signed) suffix interpret bytes as UNSIGNED and give
  * wrong results on signed pools. Use these for S2R_Ixx pools.
  * ============================================================================ */
 
@@ -1573,7 +1575,7 @@ static inline const char* s2r_strerror(S2RError err) {
  * PORTABLE BYTE ORDER + CRC32 (NEW in v3.3)  -  no stdio dependency
  * ============================================================================ */
 
-#define S2R_MAGIC_V33 0x33335253u  /* portable v3.3 format (canonical LE + CRC) */
+#define S2R_MAGIC_V33 0x33335253u  /* portable format v3.3 (canonical LE + CRC) */
 
 static inline uint16_t s2r_bswap16(uint16_t x){ return (uint16_t)((x>>8)|(x<<8)); }
 static inline uint32_t s2r_bswap32(uint32_t x){
@@ -1670,12 +1672,12 @@ static inline S2RError s2r_load_portable(S2RPool *p, const char *filename){
 #endif /* S2R_HAS_STDIO */
 
 /* ============================================================================
- * ZERO-COPY MMAP (NEW in v3.3)  -  acesso a datasets sem copiar p/ RAM
+ * ZERO-COPY MMAP (NEW in v3.3)  -  access datasets without copying to RAM
  * ----------------------------------------------------------------------------
- * Ideal for the edge: opens large files from storage, paged on demand by the
- * kernel. The resulting pool is READ-ONLY and points INSIDE the mapping.
- * Free it with s2r_map_close (do not use s2r_pool_free).
- * On a big-endian host, multibyte uses s2r_load_portable (copy + swap).
+ * Ideal for the edge: opens large files from storage, paged in on
+ * demand by the kernel. The resulting pool is READ-ONLY and points INSIDE the
+ * mapping. Release it with s2r_map_close (do not use s2r_pool_free).
+ * On a big-endian host, multibyte uses s2r_load_portable (copies + swaps).
  * ============================================================================ */
 #if S2R_HAS_MMAP
 
@@ -1707,10 +1709,10 @@ static inline S2RError s2r_map_open(S2RMap *m, const char *filename, int verify_
         if(cd!=cc){ munmap(base,fsz); close(fd); return S2R_ERR_CORRUPT; }
     }
 #if !S2R_LITTLE_ENDIAN
-    /* Big-endian host: the file is canonical LE. Convert in place via COW
-     * (MAP_PRIVATE) without modifying the on-disk file. No longer zero-copy on
-     * the touched pages, but stays portable. CRC already validated above over
-     * the canonical LE bytes (correct on any host). */
+    /* Big-endian host: the file is canonical LE. Converts in place via COW
+     * (MAP_PRIVATE) without changing the on-disk file. It is no longer zero-copy
+     * nas paginas tocadas, mas mantem portabilidade. CRC ja validado acima
+     * over the canonical LE bytes (correct on any host). */
     if(eb>1){
         if(mprotect(base,fsz,PROT_READ|PROT_WRITE)!=0){ munmap(base,fsz); close(fd); return S2R_ERR_IO; }
         s2r_swap_payload((void*)(uintptr_t)payload, eb, (size_t)count);
@@ -1734,10 +1736,10 @@ static inline void s2r_map_close(S2RMap *m){
 #endif /* S2R_HAS_MMAP */
 
 /* ============================================================================
- * SIMD SUM com DISPATCH EM RUNTIME (NEW in v3.3)
+ * SIMD SUM WITH RUNTIME DISPATCH (NEW in v3.3)
  * ----------------------------------------------------------------------------
- * A single binary: uses AVX2 if the CPU supports it (the target attribute lets
- * it compile without a global -mavx2), otherwise scalar. On non-x86 ISAs, scalar.
+ * A single binary: uses AVX2 if the CPU supports it (the target attribute allows
+ * compiling without a global -mavx2), otherwise scalar. On non-x86 ISAs, scalar.
  * ============================================================================ */
 #if S2R_X86_SIMD
 
@@ -1769,10 +1771,10 @@ static inline int s2r_has_avx2(void){ return __builtin_cpu_supports("avx2"); }
 static inline int s2r_has_avx2(void){ return 0; }
 #endif /* S2R_X86_SIMD */
 
-/* ---- NEON (ARM). Written per the standard intrinsics; NOT compiled/tested
- *      here for lack of an ARM toolchain. On aarch64 NEON is mandatory, so no
- *      runtime check is needed. The scalar fallback guarantees correctness if
- *      NEON is disabled (S2R_NO_SIMD). ---- */
+/* ---- NEON (ARM). Written to the standard intrinsics; NOT compiled/
+ *      tested here for lack of an ARM toolchain. On aarch64 NEON is mandatory,
+ *      so no runtime check is needed. The scalar fallback guarantees
+ *      correctness if NEON is disabled (S2R_NO_SIMD). ---- */
 #if S2R_ARM_NEON
 static uint64_t s2r__sum_u8_neon(const uint8_t *a, size_t n){
     uint64x2_t acc = vdupq_n_u64(0); size_t i=0;
@@ -1801,7 +1803,7 @@ static uint64_t s2r__sum_u16_neon(const uint16_t *a, size_t n){
 }
 #endif /* S2R_ARM_NEON */
 
-/* sum acelerado, mesmo resultado de s2r_sum(). */
+/* accelerated sum, same result as s2r_sum(). */
 static inline uint64_t s2r_sum_fast(const S2RPool *p){
     if(!p||p->count==0) return 0;
 #if S2R_X86_SIMD
@@ -1853,7 +1855,7 @@ static inline S2RError s2r_push_signed_adaptive(S2RPool *p, int64_t v){
 }
 
 /* ============================================================================
- * LAZY-CARRY ARITHMETIC (NEW in v3.3)  -  promove uma vez, sem wraparound
+ * LAZY-CARRY ARITHMETIC (NEW in v3.3)  -  promotes once, no wraparound
  * ============================================================================ */
 
 static inline int s2r_ensure_fits(S2RPool *p, uint64_t needed_max){
@@ -1920,11 +1922,11 @@ static inline int s2r_defer_commit(S2RDeferred *d){
 /* ============================================================================
  * SIGNED LAZY-CARRY ARITHMETIC (NEW in v3.3.1)
  * ----------------------------------------------------------------------------
- * For signed values, add/mul can move the range in both directions, so we track
+ * For signed, add/mul can move the range in both directions, so we track
  * the result's [min,max] and size the class that fits BOTH.
  * ============================================================================ */
 
-/* overflow-safe int64 (usa builtins do gcc/clang; senao, checagem manual) */
+/* overflow-safe int64 (uses gcc/clang builtins; otherwise, manual checks) */
 static inline int s2r__add_ovf_i64(int64_t a, int64_t b, int64_t *r){
 #if defined(__GNUC__)
     return __builtin_add_overflow(a,b,r);
@@ -1944,24 +1946,24 @@ static inline int s2r__mul_ovf_i64(int64_t a, int64_t b, int64_t *r){
 #endif
 }
 
-/* Smallest SIGNED class that fits the range [lo,hi]. */
+/* Smallest SIGNED class that fits the interval [lo,hi]. */
 static inline int8_t s2r_classify_signed_range(int64_t lo, int64_t hi){
     int8_t a=s2r_classify_signed(lo), b=s2r_classify_signed(hi);
-    return (a<b)?a:b;  /* more-negative enum = wider class */
+    return (a<b)?a:b;  /* more negative enum = larger class */
 }
 
-/* Promote (signed) to fit [lo,hi] if needed. Returns bits or 0. */
+/* Promotes (signed) to fit [lo,hi] if needed. Returns bits or 0. */
 static inline int s2r_ensure_fits_signed(S2RPool *p, int64_t lo, int64_t hi){
     if(!p || !s2r_is_signed(p)) return 0;
     int8_t req=s2r_classify_signed_range(lo,hi);
     size_t cur=s2r_abs_size(p->size), need=s2r_abs_size(req);
-    if(need<=cur) return (int)cur;            /* nunca rebaixa */
+    if(need<=cur) return (int)cur;            /* never demotes */
     if(p->count==0){ p->size=req; s2r__recap_empty(p); return (int)need; }
     if(!s2r_promote(p,req)) return 0;
     return (int)need;
 }
 
-/* signed scalar add WITHOUT wrap: promotes the class per the new range. */
+/* signed scalar add with NO wrap: promotes the class per the new range. */
 static inline int s2r_add_scalar_signed_safe(S2RPool *p, int64_t s){
     if(!p || !s2r_is_signed(p)) return 0;
     if(p->count==0) return (int)s2r_abs_size(p->size);
@@ -1973,7 +1975,7 @@ static inline int s2r_add_scalar_signed_safe(S2RPool *p, int64_t s){
     return (int)s2r_abs_size(p->size);
 }
 
-/* signed scalar mul WITHOUT wrap. */
+/* signed scalar mul with NO wrap. */
 static inline int s2r_mul_scalar_signed_safe(S2RPool *p, int64_t s){
     if(!p || !s2r_is_signed(p)) return 0;
     if(p->count==0) return (int)s2r_abs_size(p->size);
@@ -1986,7 +1988,7 @@ static inline int s2r_mul_scalar_signed_safe(S2RPool *p, int64_t s){
     return (int)s2r_abs_size(p->size);
 }
 
-/* ---- Signed deferred session: accumulates the chain's [vmin,vmax], promotes once. ---- */
+/* ---- Signed deferred session: accumulates the chain [vmin,vmax], promotes once. ---- */
 typedef struct {
     S2RPool *p; int64_t vmin, vmax;
     uint8_t op[S2R_DEFER_MAX_OPS]; int64_t arg[S2R_DEFER_MAX_OPS];
@@ -2022,14 +2024,14 @@ static inline int s2r_defer_signed_commit(S2RDeferredSigned *d){
 
 /* ===================================================================
  * ANALYTICS MODULE (merged in v3.3.2): bidirectional width
- * (self-healing), S2RTracked and group-by on the compact form.
+ * (self-healing), S2RTracked and group-by on the compact format.
  * =================================================================== */
 #include <string.h>
 /* ============================================================================
- * #1  LARGURA BIDIRECIONAL
+ * #1  BIDIRECTIONAL WIDTH
  * ============================================================================ */
 
-/* Reclassify to any class (up or down, signed or unsigned). */
+/* Reclassifies to any class (up or down, signed or unsigned). */
 static inline int s2r__reclass(S2RPool *p, int8_t new_size){
     if(!p) return 0;
     if(p->count==0){ p->size=new_size; p->flags = (new_size<0)?(uint8_t)(p->flags|S2R_FLAG_SIGNED):(uint8_t)(p->flags&~S2R_FLAG_SIGNED); s2r__recap_empty(p); return 1; }
@@ -2051,7 +2053,7 @@ static inline int s2r__reclass(S2RPool *p, int8_t new_size){
     return 1;
 }
 
-/* Remocao O(1) sem ordem: move o ultimo para o slot i. */
+/* O(1) unordered removal: moves the last element into slot i. */
 static inline void s2r_remove_swap(S2RPool *p, size_t i){
     if(!p || i>=p->count) return;
     size_t last=p->count-1;
@@ -2062,21 +2064,21 @@ static inline void s2r_remove_swap(S2RPool *p, size_t i){
     p->count--;
 }
 
-/* Self-healing: lowers to the SMALLEST class that fits the current data. */
+/* Self-healing: demotes to the SMALLEST class that fits the current data. */
 static inline int s2r_fit_class(S2RPool *p){
     if(!p || p->count==0) return 1;
     int8_t target;
     if(s2r_is_signed(p)){ int64_t lo=s2r_min_signed_val(p), hi=s2r_max_signed_val(p);
                           target=s2r_classify_signed_range(lo,hi); }
     else { target=(int8_t)s2r_classify(s2r_max(p)); }
-    if(s2r_abs_size(target) >= s2r_abs_size(p->size)) return 1; /* ja minimo */
+    if(s2r_abs_size(target) >= s2r_abs_size(p->size)) return 1; /* already minimal */
     return s2r__reclass(p, target);
 }
 
-/* ---- Pool com intervalo embutido: min/max em O(1) no push ---- */
+/* ---- Pool with embedded range: min/max in O(1) on push ---- */
 typedef struct {
     S2RPool p;
-    uint64_t umin, umax;   /* range rastreado (unsigned) */
+    uint64_t umin, umax;   /* tracked range (unsigned) */
     int      dirty;        /* remocao pode ter invalidado os extremos */
     int      empty;
 } S2RTracked;
@@ -2090,7 +2092,7 @@ static inline S2RError s2r_tracked_push(S2RTracked *t, uint64_t v){
     if(e==S2R_OK){ if(v<t->umin)t->umin=v; if(v>t->umax)t->umax=v; t->empty=0; }
     return e;
 }
-/* range O(1) quando limpo; rescaneia so se sujo (apos remocao). */
+/* O(1) range when clean; rescans only if dirty (after a removal). */
 static inline void s2r_tracked_range(S2RTracked *t, uint64_t *mn, uint64_t *mx){
     if(t->dirty && t->p.count){ t->umin=s2r_min(&t->p); t->umax=s2r_max(&t->p); t->dirty=0; }
     *mn = t->p.count? t->umin : 0; *mx = t->p.count? t->umax : 0;
@@ -2098,7 +2100,7 @@ static inline void s2r_tracked_range(S2RTracked *t, uint64_t *mn, uint64_t *mx){
 static inline void s2r_tracked_free(S2RTracked *t){ s2r_pool_free(&t->p); }
 
 /* ============================================================================
- * #3  GROUP-BY DIRETO NO FORMATO COMPACTO (chaves u8, <=256 grupos)
+ * #3  GROUP-BY DIRECTLY ON THE COMPACT FORMAT (u8 keys, <=256 groups)
  * ============================================================================ */
 
 /* GROUP BY key COUNT(*) : 256-bin histogram. 4-way to break the
@@ -2115,7 +2117,7 @@ static inline void s2r_histogram_u8(const S2RPool *keys, uint64_t hist[256]){
     for(int k=0;k<256;k++) hist[k]=h0[k]+h1[k]+h2[k]+h3[k];
 }
 
-/* GROUP BY key SUM(val) : sum per group. keys=u8, vals=u32. */
+/* GROUP BY key SUM(val) : per-group sum. keys=u8, vals=u32. */
 static inline void s2r_group_sum_u8u32(const S2RPool *keys, const S2RPool *vals, uint64_t gsum[256]){
     memset(gsum,0,256*sizeof(uint64_t));
     if(!keys||!vals||keys->count!=vals->count||s2r_abs_size(keys->size)!=8||s2r_abs_size(vals->size)!=32) return;
@@ -2126,12 +2128,123 @@ static inline void s2r_group_sum_u8u32(const S2RPool *keys, const S2RPool *vals,
 }
 
 
+
+/* ============================================================================
+ * #4  ANALYTICS V2: sort, unique, nunique e value_counts
+ * ============================================================================ */
+
+static inline int s2r__cmp_u8 (const void *a, const void *b){ uint8_t  x=*(const uint8_t*)a,  y=*(const uint8_t*)b;  return (x>y)-(x<y); }
+static inline int s2r__cmp_u16(const void *a, const void *b){ uint16_t x=*(const uint16_t*)a, y=*(const uint16_t*)b; return (x>y)-(x<y); }
+static inline int s2r__cmp_u32(const void *a, const void *b){ uint32_t x=*(const uint32_t*)a, y=*(const uint32_t*)b; return (x>y)-(x<y); }
+static inline int s2r__cmp_u64(const void *a, const void *b){ uint64_t x=*(const uint64_t*)a, y=*(const uint64_t*)b; return (x>y)-(x<y); }
+static inline int s2r__cmp_i8 (const void *a, const void *b){ int8_t  x=*(const int8_t*)a,  y=*(const int8_t*)b;  return (x>y)-(x<y); }
+static inline int s2r__cmp_i16(const void *a, const void *b){ int16_t x=*(const int16_t*)a, y=*(const int16_t*)b; return (x>y)-(x<y); }
+static inline int s2r__cmp_i32(const void *a, const void *b){ int32_t x=*(const int32_t*)a, y=*(const int32_t*)b; return (x>y)-(x<y); }
+static inline int s2r__cmp_i64(const void *a, const void *b){ int64_t x=*(const int64_t*)a, y=*(const int64_t*)b; return (x>y)-(x<y); }
+
+/* Sorts the pool in place, preserving the current class. Returns S2R_OK or an error.
+ * Note: READONLY/mmap pools cannot be sorted in place. */
+static inline S2RError s2r_sort(S2RPool *p){
+    if(!p) return S2R_ERR_NULL;
+    if(p->flags & S2R_FLAG_READONLY) return S2R_ERR_INVALID_SIZE;
+    if(p->count < 2) return S2R_OK;
+    switch(p->size){
+        case S2R_8:  qsort(p->data, p->count, sizeof(uint8_t),  s2r__cmp_u8);  break;
+        case S2R_16: qsort(p->data, p->count, sizeof(uint16_t), s2r__cmp_u16); break;
+        case S2R_32: qsort(p->data, p->count, sizeof(uint32_t), s2r__cmp_u32); break;
+        case S2R_64: qsort(p->data, p->count, sizeof(uint64_t), s2r__cmp_u64); break;
+        case S2R_I8:  qsort(p->data, p->count, sizeof(int8_t),  s2r__cmp_i8);  break;
+        case S2R_I16: qsort(p->data, p->count, sizeof(int16_t), s2r__cmp_i16); break;
+        case S2R_I32: qsort(p->data, p->count, sizeof(int32_t), s2r__cmp_i32); break;
+        case S2R_I64: qsort(p->data, p->count, sizeof(int64_t), s2r__cmp_i64); break;
+        default: return S2R_ERR_INVALID_SIZE;
+    }
+    return S2R_OK;
+}
+
+static inline int s2r_is_sorted(const S2RPool *p){
+    if(!p || p->count < 2) return 1;
+    if(s2r_is_signed(p)){
+        for(size_t i=1;i<p->count;i++) if(s2r_get_signed(p,i-1) > s2r_get_signed(p,i)) return 0;
+    } else {
+        for(size_t i=1;i<p->count;i++) if(s2r_get(p,i-1) > s2r_get(p,i)) return 0;
+    }
+    return 1;
+}
+
+/* Removes adjacent duplicates from an already-sorted pool. Returns the new count.
+ * The class may be demoted at the end (self-healing) if the data allows. */
+static inline size_t s2r_unique_sorted(S2RPool *p){
+    if(!p) return 0;
+    if(p->flags & S2R_FLAG_READONLY) return p->count;
+    if(p->count < 2) return p->count;
+    size_t w=1;
+    if(s2r_is_signed(p)){
+        int64_t prev=s2r_get_signed(p,0);
+        for(size_t r=1;r<p->count;r++){
+            int64_t v=s2r_get_signed(p,r);
+            if(v!=prev){ s2r_set_signed(p,w++,v); prev=v; }
+        }
+    } else {
+        uint64_t prev=s2r_get(p,0);
+        for(size_t r=1;r<p->count;r++){
+            uint64_t v=s2r_get(p,r);
+            if(v!=prev){ s2r_set(p,w++,v); prev=v; }
+        }
+    }
+    p->count=w;
+    (void)s2r_fit_class(p);
+    return p->count;
+}
+
+/* Counts distinct values without modifying the original pool. For 8/16 bits it uses a bitmap;
+ * for 32/64 bits it sorts a temporary copy and counts transitions. */
+static inline S2RError s2r_nunique(const S2RPool *p, size_t *out){
+    if(!p || !out) return S2R_ERR_NULL;
+    *out=0;
+    if(p->count==0) return S2R_OK;
+    size_t bits=s2r_abs_size(p->size);
+    if(bits==8){
+        uint8_t seen[256]; memset(seen,0,sizeof seen);
+        for(size_t i=0;i<p->count;i++){ uint64_t v=s2r_is_signed(p)?(uint64_t)(uint8_t)(int8_t)s2r_get_signed(p,i):s2r_get(p,i); if(!seen[v]){seen[v]=1; (*out)++;} }
+        return S2R_OK;
+    }
+    if(bits==16){
+        uint8_t *seen=(uint8_t*)calloc(65536,1);
+        if(!seen) return S2R_ERR_OOM;
+        for(size_t i=0;i<p->count;i++){
+            uint16_t v=s2r_is_signed(p)?(uint16_t)(int16_t)s2r_get_signed(p,i):(uint16_t)s2r_get(p,i);
+            if(!seen[v]){seen[v]=1; (*out)++;}
+        }
+        free(seen); return S2R_OK;
+    }
+    S2RPool tmp; if(!s2r_copy(&tmp,p)) return S2R_ERR_OOM;
+    S2RError e=s2r_sort(&tmp); if(e!=S2R_OK){ s2r_pool_free(&tmp); return e; }
+    *out=tmp.count?1:0;
+    if(s2r_is_signed(&tmp)){
+        for(size_t i=1;i<tmp.count;i++) if(s2r_get_signed(&tmp,i)!=s2r_get_signed(&tmp,i-1)) (*out)++;
+    } else {
+        for(size_t i=1;i<tmp.count;i++) if(s2r_get(&tmp,i)!=s2r_get(&tmp,i-1)) (*out)++;
+    }
+    s2r_pool_free(&tmp); return S2R_OK;
+}
+
+/* Value counts for u8/i8 pools. The index is the raw stored byte;
+ * for i8, value -1 falls in bin 255, -128 in bin 128, etc. */
+static inline S2RError s2r_value_counts_u8(const S2RPool *p, uint64_t counts[256]){
+    if(!p || !counts) return S2R_ERR_NULL;
+    memset(counts,0,256*sizeof(uint64_t));
+    if(s2r_abs_size(p->size)!=8) return S2R_ERR_INVALID_SIZE;
+    for(size_t i=0;i<p->count;i++) counts[((const uint8_t*)p->data)[i]]++;
+    return S2R_OK;
+}
+
 /* ===================================================================
- * BLOCK-WISE WIDTH MODULE (PFOR) — NEW in v3.3.3
- * Partitions the array into fixed-size blocks; each block picks the SMALLEST
- * class that fits its own range. An outlier inflates only its own block,
- * instead of dragging the whole collection up to a wider class.
- * Current scope: unsigned. Read/aggregate on the compact form.
+ * BLOCK-WISE WIDTH MODULE (PFOR) - NEW in v3.3.3
+ * Partitions the array into fixed-size blocks; each block chooses the
+ * SMALLEST class that fits its own range. An outlier inflates only
+ * its own block, instead of dragging the whole collection to a larger class.
+ * Current scope: unsigned. Read/aggregate on the compact data.
  * =================================================================== */
 #ifndef S2R_BLOCK_DEFAULT
 #define S2R_BLOCK_DEFAULT 256
@@ -2139,17 +2252,17 @@ static inline void s2r_group_sum_u8u32(const S2RPool *keys, const S2RPool *vals,
 
 typedef struct {
     uint8_t *data;      /* contiguous payload of all blocks            */
-    size_t   bytes;     /* payload bytes used (includes padding)       */
-    uint8_t *bclass;    /* class (8/16/32/64) of each block            */
-    size_t  *boff;      /* byte offset of each block in the payload    */
+    size_t   bytes;     /* payload bytes used (includes padding)        */
+    uint8_t *bclass;    /* class (8/16/32/64) of each block             */
+    size_t  *boff;      /* byte offset of each block in the payload     */
     size_t   nblocks;
-    size_t   count;     /* total number of elements                    */
-    size_t   block;     /* block size (elements)                       */
-    int      is_signed; /* 0 = unsigned, 1 = signed                    */
+    size_t   count;     /* total number of elements                          */
+    size_t   block;     /* block size (elements)                        */
+    int      is_signed; /* 0 = unsigned, 1 = signed                     */
 } S2RBlocked;
 
-/* Build the block-wise representation from a uint64 array (unsigned).
- * Each block is aligned to 8 bytes for safe typed access. Returns 1 on ok. */
+/* Builds the block-wise representation from a uint64 array (unsigned).
+ * Each block is 8-byte aligned for safe typed access. Returns 1 on success. */
 static inline int s2r_blocked_build(S2RBlocked *b, const uint64_t *src, size_t n, size_t block){
     if(!b) return 0;
     if(n && !src) return 0;
@@ -2236,10 +2349,10 @@ static inline void s2r_blocked_free(S2RBlocked *b){
 }
 
 
-/* ---- Signed PFOR + SIMD-accelerated block sum — NEW in v3.3.4 ---- */
+/* ---- signed PFOR + accelerated block-wise sum (SIMD) - NEW in v3.3.4 ---- */
 
-/* Build the block-wise representation from an int64 array (signed).
- * Each block picks the smallest SIGNED class that covers its [min,max]. */
+/* Builds the block-wise representation from an int64 array (signed).
+ * Each block chooses the smallest SIGNED class covering its [min,max]. */
 static inline int s2r_blocked_build_signed(S2RBlocked *b, const int64_t *src, size_t n, size_t block){
     if(!b) return 0;
     if(n && !src) return 0;
@@ -2295,7 +2408,7 @@ static inline int64_t s2r_blocked_sum_signed(const S2RBlocked *b){
     return s;
 }
 
-/* Accelerated block sum: each block becomes a "view" S2RPool and reuses the
+/* Accelerated block-wise sum: each block becomes a "view" S2RPool and reuses the
  * SIMD dispatch (s2r_sum_fast) in the block's native type (u8 -> vpsadbw, etc).
  * Per-block memory + fast reduction in the same pass. Unsigned only. */
 static inline uint64_t s2r_blocked_sum_fast(const S2RBlocked *b){
@@ -2317,4 +2430,4 @@ static inline uint64_t s2r_blocked_sum_fast(const S2RBlocked *b){
 }
 #endif
 
-#endif /* SMART2RAW_V3_3_5_H */
+#endif /* SMART2RAW_V3_3_6_H */

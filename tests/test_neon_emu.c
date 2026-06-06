@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #define _POSIX_C_SOURCE 200809L
@@ -11,8 +11,8 @@ static int pass=0,fail=0;
 #define CHECK(c,m) do{ if(c){pass++;} else {printf("  [FAIL] %s\n",m);fail++;} }while(0)
 
 int main(void){
-    printf("NEON emulator active: S2R_ARM_NEON=%d  S2R_X86_SIMD=%d\n", S2R_ARM_NEON, S2R_X86_SIMD);
-    /* chama DIRETO as funcoes NEON reais do header (nao o sum_fast) */
+    printf("Emulador NEON ativo: S2R_ARM_NEON=%d  S2R_X86_SIMD=%d\n", S2R_ARM_NEON, S2R_X86_SIMD);
+    /* calls the header's real NEON functions DIRECTLY (not sum_fast) */
     for(int t=0;t<2;t++){
         int8_t cls=t?S2R_16:S2R_8;
         for(size_t N=0;N<=100000;N=N?N*3+1:1){

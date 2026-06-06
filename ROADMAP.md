@@ -2,13 +2,17 @@
 
 This roadmap lists natural next steps for the Smart2Raw ecosystem. It is not a promise of delivery order; it is a technical direction map.
 
+## Completed in this development line
+
+- Analytics v2 primitives: sort, sortedness checks, unique, distinct counts and value counts across the C core and Go/JavaScript/Python ports.
+
 ## Near term
 
 - Keep the C header-only core as the canonical implementation.
 - Maintain Go, JavaScript and Python ports as useful ecosystem expressions.
 - Expand cross-language `.s2r` conformance tests.
 - Add more real-world fixtures: telemetry, sensor data, status codes, token IDs and quantized integer artifacts.
-- Improve CLI workflows for `inspect`, `convert`, `verify`, `sum` and `info`.
+- Improve CLI workflows for `inspect`, `convert`, `verify`, `sum`, `sort`, `unique`, `value-counts` and `info`.
 
 ## Medium term
 

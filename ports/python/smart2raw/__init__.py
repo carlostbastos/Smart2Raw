@@ -1,5 +1,5 @@
 # Smart2Raw Python port
-# Copyright (C) 2026 Carlos Alberto Terencio de Bastos
+# Copyright (C) 2026 Carlos Alberto Terencio Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 from .core import (

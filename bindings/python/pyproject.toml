@@ -1,5 +1,5 @@
 # Smart2Raw
-# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+# Copyright (C) 2026 Carlos Alberto Terêncio Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 [build-system]
 requires = ["setuptools>=61"]
@@ -7,8 +7,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "smart2raw"
-version = "3.3.5"
-description = "Wrapper Python para a biblioteca C Smart2Raw (armazenamento numerico auto-adaptativo)"
+version = "3.3.6"
+description = "Python wrapper for the Smart2Raw C library (auto-adaptive numeric storage)"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "AGPL-3.0-or-later OR LicenseRef-Commercial" }
@@ -17,5 +17,5 @@ keywords = ["integer storage", "adaptive bit-width", "SIMD", "PFOR", "quantizati
 [project.scripts]
 s2r-convert = "s2r_convert:main"
 
-# Nota: a biblioteca C (libsmart2raw.so/.dll) e compilada por build_lib.py.
-# O wrapper a localiza no diretorio do pacote ou via a variavel S2R_LIB.
+# Note: the C library (libsmart2raw.so/.dll) is built by build_lib.py.
+# The wrapper locates it in the package directory or via the S2R_LIB variable.

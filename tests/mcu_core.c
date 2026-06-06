@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "smart2raw.h"
@@ -11,6 +11,6 @@ int main(void){
   for(unsigned i=0;i<sizeof(vals)/sizeof(vals[0]);i++) s2r_push_adaptive(&p,vals[i]);
   uint64_t s=s2r_sum(&p); int8_t cls=p.size;
   s2r_pool_free(&p);
-  /* return != 0 signals error; expected sum 5000071095 mod 256 is useless, so I check via cls and count */
+  /* a non-zero return signals an error; the expected sum 5000071095 mod 256 is not useful, so I check via cls and count */
   return !(cls==64 && s==5000071095ULL);
 }
