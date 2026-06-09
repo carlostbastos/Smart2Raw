@@ -1,0 +1,22 @@
+# binários e objetos
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+a.out
+/tmp/
+build/
+# artefatos de teste
+*.s2r
+tc *.tmp
+# python
+__pycache__/
+*.pyc
+.venv/
+dist/
+*.egg-info/
+# jupyter
+.ipynb_checkpoints/
+# licenca baixada
+LICENSE.AGPL-3.0

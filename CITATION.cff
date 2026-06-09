@@ -14,12 +14,19 @@ authors:
     website: "https://br.linkedin.com/in/carlos-alberto-terencio-bastos"
     # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"   # optional: add if you have one
     # affiliation: "..."                                 # optional
-version: "3.3.6"
-date-released: "2026-06-05"
+version: "3.3.7"
+date-released: "2026-06-09"
 license: AGPL-3.0-or-later
 repository-code: "https://github.com/carlostbastos/smart2raw"
 url: "https://github.com/carlostbastos/smart2raw"
-doi: "10.5281/zenodo.20477235"
+doi: "10.5281/zenodo.20477234"   # concept DOI (resolves to latest)
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.20613701"
+    description: "Version 3.3.7"
+  - type: doi
+    value: "10.5281/zenodo.20477234"
+    description: "Concept DOI (all versions)"
 keywords:
   - integer storage
   - adaptive bit-width

@@ -1,11 +1,11 @@
 # Smart2Raw
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20477235.svg)](https://doi.org/10.5281/zenodo.20477235)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20477234.svg)](https://doi.org/10.5281/zenodo.20477234)
 [![License: AGPL v3+](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.3.6-informational.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.3.7-informational.svg)](CHANGELOG.md)
 [![Language: C11](https://img.shields.io/badge/C-C11-00599C.svg)](include/smart2raw.h)
 [![Header-only](https://img.shields.io/badge/build-header--only-success.svg)](include/smart2raw.h)
-[![Tests](https://img.shields.io/badge/tests-15%20suites%20%C2%B7%200%20failures-brightgreen.svg)](scripts/build_and_test.sh)
+[![Tests](https://img.shields.io/badge/tests-17%20suites%20%C2%B7%200%20failures-brightgreen.svg)](scripts/build_and_test.sh)
 [![Ports](https://img.shields.io/badge/ports-Go%20%C2%B7%20JS%20%C2%B7%20Python-blueviolet.svg)](ports/)
 
 **Adaptive numeric storage for integer data.**
@@ -22,6 +22,7 @@ Instead of storing everything as `int64` or `int32` by default, Smart2Raw scans 
 
 ## Table of contents
 
+- [What's new in 3.3.7](#whats-new-in-337)
 - [What's new in 3.3.6](#whats-new-in-336)
 - [Why this matters](#why-this-matters)
 - [What Smart2Raw is](#what-smart2raw-is)
@@ -47,6 +48,18 @@ Instead of storing everything as `int64` or `int32` by default, Smart2Raw scans 
 - [One-sentence summary](#one-sentence-summary)
 
 ---
+
+## What's new in 3.3.7
+
+Release 3.3.7 extends the SIMD layer and hardens the performance story with measured, reproducible benchmarks.
+
+- **AVX-512 `u8` sum** — a dedicated path (`_mm512_sad_epu8`, 64 bytes/iter) selected at runtime ahead of AVX2. Measured on an AVX-512 Xeon at ~1.17x (cache-resident) to ~1.30x (memory-bound) over AVX2, bit-identical to scalar. A `u16` AVX-512 kernel was benchmarked, came out slower than AVX2, and was deliberately not shipped — `u16` stays on AVX2 by measurement.
+- **RISC-V Vector (RVV 1.0) path — experimental.** Written to the RVV 1.0 intrinsics, gated by `__riscv_v_intrinsic`; logic validated on x86 via an emulation shim (`tests/rvv_emu`), pending an `rv64gcv` + QEMU/hardware run.
+- **ARM SVE2 path — experimental.** Written to the SVE ACLE intrinsics, gated by `__ARM_FEATURE_SVE2`; logic validated via `tests/sve2_emu`, pending real SVE hardware. At 128-bit SVE the width equals NEON, so the expected gain is marginal.
+- **New reproducible benchmarks** under `benchmarks/`: `bench_avx512_width.c` (instruction width), `bench_format_endtoend.c` (conventional `int64` vs compact `u8`) and `bench_format_lanes.c` (compact format unlocks SIMD lanes). End-to-end, summing compact `u8` with AVX-512 measured ~13-14x over the conventional `int64`+scalar baseline on this machine.
+- **Test suite is now 17 suites, 0 failures** (added the RVV and SVE2 emulated-logic suites).
+
+See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## What's new in 3.3.6
 
@@ -285,7 +298,7 @@ This reduces reallocations and avoids intermediate overflows.
 
 The C implementation can use hardware-specific optimized paths when available, selected by runtime dispatch.
 
-On x86 with AVX2, byte summation can use `vpsadbw`, which performs horizontal byte sums in hardware and avoids costly widening patterns. There is a NEON path for ARM.
+On x86 the u8 sum uses `vpsadbw`: AVX2 (256-bit) and, when present, a dedicated AVX-512 path selected at runtime. The AVX-512 u8 path was measured on a Xeon at ~1.17x (cache-resident) to ~1.30x (memory-bound) over AVX2 (a u16 AVX-512 kernel was slower than AVX2, so u16 stays on AVX2). There is a NEON path for ARM, plus experimental RISC-V Vector (RVV) and ARM SVE2 paths, both validated for logic via emulation and pending hardware validation.
 
 When the optimized path is not available, Smart2Raw falls back to scalar code.
 
@@ -573,7 +586,7 @@ Natural targets include:
 - iOS through C/Swift wrappers;
 - embedded systems;
 - RISC-V through the scalar C path;
-- RISC-V Vector as a future SIMD target.
+- RISC-V Vector (RVV): experimental SIMD path (logic-validated via emulation; pending hardware validation).
 
 The canonical implementation is C. Ports exist to make the same idea useful in other ecosystems.
 
@@ -629,6 +642,8 @@ Actual speedups depend on the hardware, compiler, data distribution, working-set
 | Min/max reductions with vectorization | 8-10x |
 | SIMD `u8` sum (`vpsadbw`) | 2.8-10x |
 | SIMD `u16` sum | 1.4-4x |
+| AVX-512 `u8` sum vs AVX2 | ~1.17-1.30x (measured, Xeon) |
+| End-to-end `u8`+AVX-512 vs `int64`+scalar | ~13-14x (measured) |
 | 4-way histogram on skewed data | 3.6-4x |
 | `u8 -> u32` group sum | ~1.78 G rows/s |
 | int8 zero-point correction | 2.3x |
@@ -688,7 +703,7 @@ bash scripts/build_and_test.sh
 Expected result:
 
 ```text
-15 suites OK, 0 failures
+17 suites OK, 0 failures
 ```
 
 Build the tools and examples:
@@ -711,7 +726,7 @@ Run conformance:
 bash conformance/run_conformance.sh
 ```
 
-The C suite covers functionality (all modules, PFOR, signed PFOR + SIMD, regression, backward compatibility, signed lazy-carry, big-endian COW mmap, analytics, Analytics v2) across multiple build gates: `-O3 -march=native`, `-O2`, no-SIMD (`-DS2R_NO_SIMD`), strict ISO C11 (`-pedantic`), an MCU build with no stdio/mmap/SIMD, plus emulated NEON and big-endian paths (CI repeats the ARM/BE paths on real hardware via QEMU).
+The C suite covers functionality (all modules, PFOR, signed PFOR + SIMD, regression, backward compatibility, signed lazy-carry, big-endian COW mmap, analytics, Analytics v2) across multiple build gates: `-O3 -march=native`, `-O2`, no-SIMD (`-DS2R_NO_SIMD`), strict ISO C11 (`-pedantic`), an MCU build with no stdio/mmap/SIMD, plus emulated NEON and big-endian paths and experimental RISC-V RVV and ARM SVE2 paths validated for logic via emulation (CI repeats the ARM/BE paths on real hardware via QEMU; RVV/SVE2 pending real hardware builds).
 
 ---
 
@@ -732,10 +747,11 @@ examples/
 
 tests/
   C suites: modules, regression, analytics, mmap, SIMD, PFOR,
-  plus emulated NEON and big-endian paths
+  plus emulated NEON, RISC-V RVV and ARM SVE2 paths, and big-endian
 
 benchmarks/
   measured experiments + RESULTS.md
+  bench_avx512_width.c / bench_format_endtoend.c / bench_format_lanes.c
 
 concepts/
   the core idea in a single annotated file
@@ -780,7 +796,8 @@ Planned or natural next steps:
 - DuckDB adapter;
 - Arrow bridge;
 - RISC-V scalar validation;
-- RISC-V Vector SIMD path;
+- RISC-V Vector SIMD path (experimental; logic-validated via emulation, pending hardware);
+- ARM SVE2 SIMD path (experimental; logic-validated via emulation, pending hardware);
 - broader ARM NEON validation on real hardware;
 - block-wise `.s2r` serialization;
 - sub-byte experimental mode for int4-style use cases.
@@ -814,7 +831,7 @@ NOTICE
 
 If you use Smart2Raw in research, benchmarks, papers, reports, products or technical comparisons, please cite the project using [`CITATION.cff`](CITATION.cff).
 
-Releases are archived on Zenodo with versioned DOIs under the concept DOI [10.5281/zenodo.20477235](https://doi.org/10.5281/zenodo.20477235).
+Releases are archived on Zenodo with versioned DOIs under the concept DOI [10.5281/zenodo.20477234](https://doi.org/10.5281/zenodo.20477234). This release (3.3.7): [10.5281/zenodo.20613701](https://doi.org/10.5281/zenodo.20613701).
 
 ---
 

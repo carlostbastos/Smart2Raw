@@ -22,6 +22,6 @@ Functional suites passed for:
 - Python port;
 - `.s2r` conformance fixtures.
 
-Project DOI: https://doi.org/10.5281/zenodo.20477235
+Project DOI: https://doi.org/10.5281/zenodo.20477234
 
 License: AGPL-3.0-or-later, with commercial licensing option.

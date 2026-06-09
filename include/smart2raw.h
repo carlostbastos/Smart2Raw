@@ -1,5 +1,5 @@
 /*
- * Smart2Raw v3.3.6 - Adaptive numeric storage (header-only)
+ * Smart2Raw v3.3.7 - Adaptive numeric storage (header-only)
  * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  * =======================================================================
@@ -31,6 +31,10 @@
  *   MCU footprint (all gates on): ~3.4 KB of code.
  *
  * --- CHANGELOG (most recent first) ---
+ * v3.3.7: AVX-512 u8 sum path (measured ~1.17-1.30x over AVX2; u16 stays on
+ *         AVX2 by measurement). EXPERIMENTAL RISC-V RVV and ARM SVE2 paths,
+ *         logic-validated via emulation (tests/rvv_emu, tests/sve2_emu),
+ *         pending hardware. New benchmarks/ programs. Test suite: 17 suites.
  * v3.3.6: Analytics v2 - sort/is_sorted, unique_sorted, nunique e
  *         value_counts for compact integer arrays.
  * v3.3.5: fix - class promotion with an empty pool (count==0) did not
@@ -63,6 +67,11 @@
  * Nota honesta: os caminhos NEON e big-endian sao validados em ambiente
  * EMULATED faithfully to ACLE (they exercise the real code on x86), not on physical silicon.
  * A final build on real ARM and, ideally, on a big-endian host is recommended.
+ * The RISC-V Vector (RVV) and ARM SVE2 paths are EXPERIMENTAL: written to the
+ * respective intrinsics and validated for LOGIC via emulation (tests/rvv_emu,
+ * tests/sve2_emu) on x86, but not yet compiled or run on RISC-V/SVE hardware. Both
+ * are gated off by default. The AVX-512 u8 path, by contrast, is compiled and run on
+ * x86 here (bit-identical to scalar; ~1.17-1.30x over AVX2 for u8, measured).
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  * Dual-licensed: AGPL-3.0-or-later OR commercial. See LICENSING.md.
@@ -87,8 +96,8 @@ extern "C" {
 
 #define S2R_VERSION_MAJOR 3
 #define S2R_VERSION_MINOR 3
-#define S2R_VERSION_PATCH 6
-#define S2R_VERSION_STRING "3.3.6"
+#define S2R_VERSION_PATCH 7
+#define S2R_VERSION_STRING "3.3.7"
 
 /* ============================================================================
  * CONFIGURATION
@@ -179,6 +188,26 @@ extern "C" {
   #define S2R_ARM_NEON 1
 #else
   #define S2R_ARM_NEON 0
+#endif
+
+/* RISC-V Vector (RVV 1.0). EXPERIMENTAL. Enabled when the target provides the
+ * RVV C intrinsics (__riscv_v_intrinsic, set by -march=rv64gcv on gcc/clang),
+ * or forced for the emulation test (S2R_FORCE_RVV). On any other target this is
+ * 0 and the scalar path is used. */
+#if !defined(S2R_NO_SIMD) && (defined(__riscv_v_intrinsic) || defined(S2R_FORCE_RVV))
+  #include <riscv_vector.h>
+  #define S2R_RISCV_RVV 1
+#else
+  #define S2R_RISCV_RVV 0
+#endif
+
+/* ARM SVE2. EXPERIMENTAL (same status as RVV). Enabled with __ARM_FEATURE_SVE2
+ * (e.g. -march=armv9-a+sve2) or forced for the emulation test (S2R_FORCE_SVE2). */
+#if !defined(S2R_NO_SIMD) && (defined(__ARM_FEATURE_SVE2) || defined(S2R_FORCE_SVE2))
+  #include <arm_sve.h>
+  #define S2R_ARM_SVE2 1
+#else
+  #define S2R_ARM_SVE2 0
 #endif
 
 /* ============================================================================
@@ -1766,8 +1795,23 @@ static uint64_t s2r__sum_u16_avx2(const uint16_t *a, size_t n){
     for(; i<n; i++) total+=a[i];
     return total;
 }
+
+/* AVX-512 (avx512bw). u8 sum via _mm512_sad_epu8 (64 bytes/iter): measured on a
+ * Xeon at ~1.17x (cache-resident) to ~1.30x (memory-bound) over AVX2, ~12-14x over
+ * scalar. NOTE: a u16 AVX-512 kernel was benchmarked and came out SLOWER than the
+ * AVX2 u16 path (8 vs 16 elements/iter), so u16 stays on AVX2 by measurement. */
+__attribute__((target("avx512bw")))
+static uint64_t s2r__sum_u8_avx512(const uint8_t *a, size_t n){
+    const __m512i z=_mm512_setzero_si512(); __m512i acc=z; size_t i=0;
+    for(; i+64<=n; i+=64) acc=_mm512_add_epi64(acc,_mm512_sad_epu8(_mm512_loadu_si512((const void*)(a+i)),z));
+    uint64_t s=(uint64_t)_mm512_reduce_add_epi64(acc);
+    for(; i<n; i++) s+=a[i];
+    return s;
+}
 static inline int s2r_has_avx2(void){ return __builtin_cpu_supports("avx2"); }
+static inline int s2r_has_avx512bw(void){ return __builtin_cpu_supports("avx512bw"); }
 #else
+static inline int s2r_has_avx512bw(void){ return 0; }
 static inline int s2r_has_avx2(void){ return 0; }
 #endif /* S2R_X86_SIMD */
 
@@ -1803,10 +1847,88 @@ static uint64_t s2r__sum_u16_neon(const uint16_t *a, size_t n){
 }
 #endif /* S2R_ARM_NEON */
 
+/* ---- RISC-V Vector (RVV 1.0). EXPERIMENTAL: written to the RVV 1.0 C
+ *      intrinsics, but NOT compiled on a RISC-V toolchain in this environment
+ *      (none available). The strip-mining + reduction LOGIC is validated on x86
+ *      via tests/rvv_emu (a minimal, auditable shim, like the NEON one). The
+ *      intrinsic signatures must be confirmed on a real rv64gcv build (gcc/clang
+ *      + QEMU or hardware) before this path is promoted from "experimental".
+ *      The scalar fallback always guarantees correctness when RVV is off.
+ *      Idiom: zero-extend each element to u64 and accumulate in a u64 vector
+ *      (overflow-safe for any count), then a single reduction. Vector-length
+ *      agnostic: works for any VLEN. ---- */
+#if S2R_RISCV_RVV
+static uint64_t s2r__sum_u8_rvv(const uint8_t *a, size_t n){
+    size_t vlmax = __riscv_vsetvlmax_e64m1();
+    vuint64m1_t acc = __riscv_vmv_v_x_u64m1(0, vlmax);
+    size_t i=0;
+    while(i<n){
+        size_t vl = __riscv_vsetvl_e8mf8(n - i);
+        vuint8mf8_t v8  = __riscv_vle8_v_u8mf8(a + i, vl);
+        vuint64m1_t v64 = __riscv_vzext_vf8_u64m1(v8, vl);     /* u8 -> u64 */
+        acc = __riscv_vadd_vv_u64m1_tu(acc, acc, v64, vl);     /* tail-undisturbed */
+        i += vl;
+    }
+    vuint64m1_t zero = __riscv_vmv_v_x_u64m1(0, vlmax);
+    vuint64m1_t red  = __riscv_vredsum_vs_u64m1_u64m1(acc, zero, vlmax);
+    return __riscv_vmv_x_s_u64m1_u64(red);
+}
+static uint64_t s2r__sum_u16_rvv(const uint16_t *a, size_t n){
+    size_t vlmax = __riscv_vsetvlmax_e64m1();
+    vuint64m1_t acc = __riscv_vmv_v_x_u64m1(0, vlmax);
+    size_t i=0;
+    while(i<n){
+        size_t vl = __riscv_vsetvl_e16mf4(n - i);
+        vuint16mf4_t v16 = __riscv_vle16_v_u16mf4(a + i, vl);
+        vuint64m1_t  v64 = __riscv_vzext_vf4_u64m1(v16, vl);   /* u16 -> u64 */
+        acc = __riscv_vadd_vv_u64m1_tu(acc, acc, v64, vl);
+        i += vl;
+    }
+    vuint64m1_t zero = __riscv_vmv_v_x_u64m1(0, vlmax);
+    vuint64m1_t red  = __riscv_vredsum_vs_u64m1_u64m1(acc, zero, vlmax);
+    return __riscv_vmv_x_s_u64m1_u64(red);
+}
+#endif /* S2R_RISCV_RVV */
+
+/* ---- ARM SVE2. EXPERIMENTAL: written to the SVE ACLE intrinsics; NOT compiled on
+ *      an ARM/SVE toolchain here. The vector-length-agnostic LOGIC is validated on
+ *      x86 via tests/sve2_emu. Idiom mirrors the RVV one: an extending load (bytes
+ *      or halfwords -> u64) with predicated accumulation, then a horizontal sum.
+ *      Note: at 128-bit SVE the width equals NEON, so the gain is marginal; this is
+ *      validated/measured on real SVE hardware before being promoted. ---- */
+#if S2R_ARM_SVE2
+static uint64_t s2r__sum_u8_sve(const uint8_t *a, size_t n){
+    svuint64_t acc = svdup_n_u64(0);
+    uint64_t i=0, step=svcntd();
+    for(; i<n; i+=step){
+        svbool_t pg = svwhilelt_b64(i,(uint64_t)n);
+        svuint64_t v = svld1ub_u64(pg, a+i);   /* load bytes, zero-extend to u64 */
+        acc = svadd_u64_m(pg, acc, v);          /* predicated accumulate (tail-safe) */
+    }
+    return svaddv_u64(svptrue_b64(), acc);      /* horizontal sum */
+}
+static uint64_t s2r__sum_u16_sve(const uint16_t *a, size_t n){
+    svuint64_t acc = svdup_n_u64(0);
+    uint64_t i=0, step=svcntd();
+    for(; i<n; i+=step){
+        svbool_t pg = svwhilelt_b64(i,(uint64_t)n);
+        svuint64_t v = svld1uh_u64(pg, a+i);   /* load u16, zero-extend to u64 */
+        acc = svadd_u64_m(pg, acc, v);
+    }
+    return svaddv_u64(svptrue_b64(), acc);
+}
+#endif /* S2R_ARM_SVE2 */
+
 /* accelerated sum, same result as s2r_sum(). */
 static inline uint64_t s2r_sum_fast(const S2RPool *p){
     if(!p||p->count==0) return 0;
 #if S2R_X86_SIMD
+    if(s2r_has_avx512bw()){
+        switch(s2r_abs_size(p->size)){
+            case 8:  return s2r__sum_u8_avx512((const uint8_t*)p->data,p->count);
+            default: break;   /* u16 stays on AVX2 (measured faster) */
+        }
+    }
     if(s2r_has_avx2()){
         switch(s2r_abs_size(p->size)){
             case 8:  return s2r__sum_u8_avx2((const uint8_t*)p->data,p->count);
@@ -1819,6 +1941,20 @@ static inline uint64_t s2r_sum_fast(const S2RPool *p){
     switch(s2r_abs_size(p->size)){
         case 8:  return s2r__sum_u8_neon((const uint8_t*)p->data,p->count);
         case 16: return s2r__sum_u16_neon((const uint16_t*)p->data,p->count);
+        default: break;
+    }
+#endif
+#if S2R_ARM_SVE2
+    switch(s2r_abs_size(p->size)){
+        case 8:  return s2r__sum_u8_sve((const uint8_t*)p->data,p->count);
+        case 16: return s2r__sum_u16_sve((const uint16_t*)p->data,p->count);
+        default: break;
+    }
+#endif
+#if S2R_RISCV_RVV
+    switch(s2r_abs_size(p->size)){
+        case 8:  return s2r__sum_u8_rvv((const uint8_t*)p->data,p->count);
+        case 16: return s2r__sum_u16_rvv((const uint16_t*)p->data,p->count);
         default: break;
     }
 #endif

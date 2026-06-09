@@ -37,7 +37,9 @@ This roadmap lists natural next steps for the Smart2Raw ecosystem. It is not a p
 - Linux ARM64 validation on real hardware.
 - macOS Apple Silicon validation.
 - RISC-V scalar validation through the portable C path.
-- RISC-V Vector as a future SIMD path.
+- AVX-512: dedicated u8 sum path added and measured on hardware (~1.17-1.30x over AVX2 for u8; u16 stays on AVX2 by measurement).
+- RISC-V Vector (RVV 1.0): experimental SIMD path for sum added (logic validated via emulation); pending validation on an rv64gcv toolchain plus QEMU/hardware before being promoted to supported.
+- ARM SVE2: experimental SIMD path for sum added (logic validated via emulation); pending real SVE hardware. Marginal expected gain at 128-bit SVE.
 - Broader ARM NEON validation on real hardware.
 
 ## Format evolution

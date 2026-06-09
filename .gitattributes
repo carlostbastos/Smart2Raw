@@ -1,0 +1,30 @@
+# Normalize line endings. The repository stores text as LF; this keeps shell
+# scripts and CI working on Linux even when edited on Windows (CRLF in a *.sh
+# file causes "bad interpreter" errors). Binary files are never touched.
+
+* text=auto eol=lf
+
+# Source, scripts and metadata: always LF
+*.c       text eol=lf
+*.h       text eol=lf
+*.sh      text eol=lf
+*.py      text eol=lf
+*.go      text eol=lf
+*.mjs     text eol=lf
+*.js      text eol=lf
+*.json    text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.md      text eol=lf
+*.cff     text eol=lf
+*.toml    text eol=lf
+*.txt     text eol=lf
+Makefile  text eol=lf
+
+# Binary: keep byte-for-byte, no EOL conversion
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.pdf     binary
+*.zip     binary
+*.s2r     binary

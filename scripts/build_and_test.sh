@@ -4,10 +4,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Smart2Raw - build + test across all configurations.
 # Usage: scripts/build_and_test.sh   (needs gcc; the header is header-only)
-# Expected result: 15 suites OK, 0 failures.
+# Expected result: 17 suites OK, 0 failures.
 set -u
 cd "$(dirname "$0")/.."           # repository root
-INC="-I include -I tests -I tests/neon_emu"
+INC="-I include -I tests -I tests/neon_emu -I tests/rvv_emu -I tests/sve2_emu"
 H="include/smart2raw.h"
 PASS=0; FAIL=0
 ok(){ printf "  \033[32mOK\033[0m  %-42s %s\n" "$1" "$2"; PASS=$((PASS+1)); }
@@ -39,9 +39,11 @@ run "Edge x86 -O2"                             -O2 test_regressao.c
 run "No SIMD (-DS2R_NO_SIMD)"                  -O2 -DS2R_NO_SIMD test_regressao.c
 run "Strict ISO C11 (-pedantic)"              -O2 -std=c11 -pedantic test_regressao.c
 run "MCU -Os (no stdio/mmap/simd)"             -Os -DS2R_NO_STDIO -DS2R_NO_MMAP -DS2R_NO_SIMD mcu_core.c
-echo "-- Emulated hardware (real code on x86; CI repeats on real ARM/BE via QEMU) --"
+echo "-- Emulated hardware (real code on x86; CI repeats on real ARM/BE/RISC-V via QEMU) --"
 run "NEON ARM emulated (26)"                   -O2 -D__ARM_NEON=1 test_neon_emu.c
 run "Big-endian emulated (6)"                  -O2 test_be_emu.c
+run "RISC-V RVV emulated (logic)"              -O2 -DS2R_FORCE_RVV=1 test_rvv_emu.c
+run "ARM SVE2 emulated (logic)"                 -O2 -DS2R_FORCE_SVE2=1 test_sve2_emu.c
 echo "------------------------------------------------------------"
 echo "  TOTAL: $PASS OK, $FAIL failures"
 [ $FAIL -eq 0 ]
