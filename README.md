@@ -654,6 +654,8 @@ Actual speedups depend on the hardware, compiler, data distribution, working-set
 
 These numbers are not universal promises. They show where the mechanism works. Server-capacity figures elsewhere in the project are **model estimates**, clearly labeled as such, not measurements of a real server.
 
+**Run it on your own data.** [`benchmarks/maestro/`](benchmarks/maestro/) is an interactive terminal benchmark — standard-library Python, no numpy — that compares conventional `int64`, **SQLite**, and Smart2Raw on the same dataset: memory, on-disk size, query speed (`SUM`/`COUNT`) and SIMD throughput, driven through the library's real C kernels via `ctypes`. Point it at any integer CSV to see the figures on your machine.
+
 ---
 
 ## When Smart2Raw does not help much
@@ -752,6 +754,7 @@ tests/
 benchmarks/
   measured experiments + RESULTS.md
   bench_avx512_width.c / bench_format_endtoend.c / bench_format_lanes.c
+  maestro/  interactive Python benchmark (int64 / SQLite vs Smart2Raw)
 
 concepts/
   the core idea in a single annotated file
