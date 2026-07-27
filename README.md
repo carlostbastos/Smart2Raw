@@ -870,7 +870,7 @@ NOTICE
 
 If you use Smart2Raw in research, benchmarks, papers, reports, products or technical comparisons, please cite the project using [`CITATION.cff`](CITATION.cff).
 
-Releases are archived on Zenodo with versioned DOIs under the concept DOI [10.5281/zenodo.20477234](https://doi.org/10.5281/zenodo.20477234). The 3.3.7 release is [10.5281/zenodo.20613701](https://doi.org/10.5281/zenodo.20613701); 3.4.0 has not been deposited yet.
+Releases are archived on Zenodo with versioned DOIs under the concept DOI [10.5281/zenodo.20477234](https://doi.org/10.5281/zenodo.20477234). This release (3.4.0) is [10.5281/zenodo.21614309](https://doi.org/10.5281/zenodo.21614309); the previous 3.3.7 release is [10.5281/zenodo.20613701](https://doi.org/10.5281/zenodo.20613701).
 
 ---
 

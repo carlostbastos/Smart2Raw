@@ -44,7 +44,7 @@ This roadmap lists natural next steps for the Smart2Raw ecosystem. It is not a p
 
 ## Format evolution
 
-- Block-wise `.s2r` serialization.
+- Block-wise `.s2r` serialization. **Done in 3.4.0** (`fmt = 2`, CRC32 over metadata and payload; `s2r_blocked_save` / `s2r_blocked_load`).
 - Optional metadata blocks.
 - Extended checksums or integrity modes.
 - Experimental sub-byte mode for int4-style use cases.

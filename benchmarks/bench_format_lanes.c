@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
  * Benchmark 3 of 3 - FORMAT UNLOCKS LANES, SIMD held constant (AVX-512 both).

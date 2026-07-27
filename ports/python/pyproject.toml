@@ -1,15 +1,18 @@
+# Smart2Raw
+# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+# SPDX-License-Identifier: AGPL-3.0-or-later
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "smart2raw-port"
-version = "3.3.6"
+version = "3.4.0"
 description = "Pure-Python Smart2Raw port for notebooks and conformance fixtures"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "AGPL-3.0-or-later" }
-authors = [{ name = "Carlos Alberto Terencio Bastos" }]
+authors = [{ name = "Carlos Alberto Terêncio de Bastos" }]
 
 [tool.setuptools.packages.find]
 where = ["."]

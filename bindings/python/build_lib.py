@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Smart2Raw
-# Copyright (C) 2026 Carlos Alberto Terêncio Bastos
+# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Builds the Smart2Raw shared library for the current OS.
 

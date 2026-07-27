@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Smart2Raw
-# Copyright (C) 2026 Carlos Alberto Terencio Bastos
+# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Smart2Raw - build + test across all configurations.
 # Usage: scripts/build_and_test.sh   (needs gcc; the header is header-only)

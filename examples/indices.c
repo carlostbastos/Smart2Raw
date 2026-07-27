@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /* Indices/IDs: 2x when the vocabulary fits in 16 bits; honestly ~1x above. */

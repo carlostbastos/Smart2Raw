@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /* Compiled with -DS2R_FORCE_SVE2=1 and -I tests/sve2_emu, so the header includes the

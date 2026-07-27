@@ -8,6 +8,8 @@
 | Block-wise width (PFOR), signed and unsigned, SIMD block sum | yes | yes |
 | Zero-copy mmap + portable I/O (`.s2r`, CRC32) | yes | yes |
 | CLI, verifier, converter, Python bindings | yes | yes |
+| SIMD-dispatched predicate family (`count_gt`/`lt`/`eq`/`range`, `sum_if`), signed and unsigned | yes | yes |
+| PFOR frame of reference, zone statistics, sorted-block flag, block-wise `.s2r` (`fmt = 2`) | yes | yes |
 
 > The open edition (this repository) includes everything listed above. The
 > advanced edition is offered under a commercial license and may add features

@@ -1,5 +1,5 @@
 # Smart2Raw
-# Copyright (C) 2026 Carlos Alberto Terêncio Bastos
+# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """
 smart2raw - Python (ctypes) wrapper over the Smart2Raw C library.

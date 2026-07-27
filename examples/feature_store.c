@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /* Feature store: each column at its own width (age u8, flag u8, price u16, id u32). */

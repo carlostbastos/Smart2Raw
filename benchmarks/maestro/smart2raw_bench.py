@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# Smart2Raw
+# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Smart2Raw - Maestro de benchmark (terminal, so biblioteca padrao)
 =================================================================

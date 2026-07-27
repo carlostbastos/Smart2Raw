@@ -1,6 +1,6 @@
 /*
  * Smart2Raw
- * Copyright (C) 2026 Carlos Alberto Terêncio Bastos
+ * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 /* IoT/edge: sensor readings in centi-degrees (-2000..8499), signed -> i16. */

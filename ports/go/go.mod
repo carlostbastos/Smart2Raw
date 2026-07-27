@@ -1,3 +1,3 @@
-module github.com/caterencio/smart2raw/ports/go
+module github.com/carlostbastos/Smart2Raw/ports/go
 
 go 1.22
