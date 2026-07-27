@@ -14,7 +14,7 @@ authors:
     website: "https://br.linkedin.com/in/carlos-alberto-terencio-bastos"
     # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"   # optional: add if you have one
     # affiliation: "..."                                 # optional
-version: "3.3.7"
+version: "3.4.0"
 date-released: "2026-06-09"
 license: AGPL-3.0-or-later
 repository-code: "https://github.com/carlostbastos/smart2raw"

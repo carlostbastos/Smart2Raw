@@ -1,22 +1,14 @@
-# binários e objetos
-*.o
-*.a
-*.so
-*.dll
-*.dylib
-a.out
-/tmp/
-build/
-# artefatos de teste
-*.s2r
-tc *.tmp
-# python
+
+# build artifacts
+tools/s2r
+tools/s2r_convert
+tools/s2r_verify
+bindings/python/libsmart2raw.*
+bindings/python/smart2raw.dll
+benchmarks/warehouse/bench_warehouse
+_to_delete/
+
+# test artifacts written into the repo root by the suites
+/*.s2r
 __pycache__/
 *.pyc
-.venv/
-dist/
-*.egg-info/
-# jupyter
-.ipynb_checkpoints/
-# licenca baixada
-LICENSE.AGPL-3.0

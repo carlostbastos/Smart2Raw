@@ -2,10 +2,10 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20477234.svg)](https://doi.org/10.5281/zenodo.20477234)
 [![License: AGPL v3+](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.3.7-informational.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.4.0-informational.svg)](CHANGELOG.md)
 [![Language: C11](https://img.shields.io/badge/C-C11-00599C.svg)](include/smart2raw.h)
 [![Header-only](https://img.shields.io/badge/build-header--only-success.svg)](include/smart2raw.h)
-[![Tests](https://img.shields.io/badge/tests-17%20suites%20%C2%B7%200%20failures-brightgreen.svg)](scripts/build_and_test.sh)
+[![Tests](https://img.shields.io/badge/tests-25%20suites%20%C2%B7%200%20failures-brightgreen.svg)](scripts/build_and_test.sh)
 [![Ports](https://img.shields.io/badge/ports-Go%20%C2%B7%20JS%20%C2%B7%20Python-blueviolet.svg)](ports/)
 
 **Adaptive numeric storage for integer data.**
@@ -22,8 +22,8 @@ Instead of storing everything as `int64` or `int32` by default, Smart2Raw scans 
 
 ## Table of contents
 
+- [What's new in 3.4.0](#whats-new-in-340)
 - [What's new in 3.3.7](#whats-new-in-337)
-- [What's new in 3.3.6](#whats-new-in-336)
 - [Why this matters](#why-this-matters)
 - [What Smart2Raw is](#what-smart2raw-is)
 - [What Smart2Raw is not](#what-smart2raw-is-not)
@@ -48,6 +48,42 @@ Instead of storing everything as `int64` or `int32` by default, Smart2Raw scans 
 - [One-sentence summary](#one-sentence-summary)
 
 ---
+
+## What's new in 3.4.0
+
+Release 3.4.0 is a correctness, contract and performance release: no new
+capability, but a long list of things that were quietly wrong or quietly slow.
+
+- **The `.s2r` reader now obeys its own specification.** Header flags were adopted
+  verbatim from disk, so a crafted `EXTERNAL` bit leaked every loaded pool
+  (confirmed under AddressSanitizer) and `READONLY` froze it. `fmt`, the reserved
+  byte, class/flag agreement and exact file length are enforced now - every one of
+  those was accepted by C and rejected by at least one port, so `.s2r` was not the
+  portable contract it claimed to be. The Go reader also accepted a declared count
+  that wrapped when converted to `int`.
+- **Two classes of undefined behaviour, fixed.** `s2r_mul_scalar` at u16 promoted
+  to `int` and overflowed `INT_MAX` - on the very path whose correctness proof
+  requires *defined* wraparound. The signed sum accumulators used `int64_t` where
+  their unsigned twins had always used `uint64_t`.
+- **SIMD dispatch for the whole predicate family.** `sum_fast` used to be the only
+  dispatched operation; every filter ran scalar. The family reduces to one range
+  kernel - `count_gt`/`lt`/`eq` *are* ranges - and the signed case falls out of the
+  same kernel by two's complement. Measured 4.5x-13.4x.
+- **Frame of reference in the block-wise (PFOR) layer.** A block's class came from
+  its maximum alone, so a block of `{9000000000, 9000000001, ...}` was stored as
+  `u64` despite spanning 1. Measured 3.9x on unix timestamps, 7.7x on sequential
+  IDs, 170x on a constant column, and exact parity where the baseline is already
+  zero. Plus zone statistics (`SUM`/`MAX`/`MIN` in O(nblocks), 114x faster),
+  sorted blocks answering `count_gt` by binary search above a measured size gate,
+  and block-wise `.s2r` serialization.
+- **ARM SVE2 was unreachable dead code** behind NEON, *and* 8x too narrow;
+  rewritten around UDOT. RISC-V RVV widened the same way. Both stay experimental.
+- **25 test suites** (was 17), including 142,952 checks that sweep every threshold
+  and every ordered pair of range endpoints for the 8-bit classes. CI gained
+  ASan+UBSan, jobs for the three ports and a conformance job - and can now actually
+  fail, which it could not before.
+
+See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## What's new in 3.3.7
 
@@ -705,7 +741,7 @@ bash scripts/build_and_test.sh
 Expected result:
 
 ```text
-17 suites OK, 0 failures
+25 suites OK, 0 failures
 ```
 
 Build the tools and examples:
@@ -834,7 +870,7 @@ NOTICE
 
 If you use Smart2Raw in research, benchmarks, papers, reports, products or technical comparisons, please cite the project using [`CITATION.cff`](CITATION.cff).
 
-Releases are archived on Zenodo with versioned DOIs under the concept DOI [10.5281/zenodo.20477234](https://doi.org/10.5281/zenodo.20477234). This release (3.3.7): [10.5281/zenodo.20613701](https://doi.org/10.5281/zenodo.20613701).
+Releases are archived on Zenodo with versioned DOIs under the concept DOI [10.5281/zenodo.20477234](https://doi.org/10.5281/zenodo.20477234). The 3.3.7 release is [10.5281/zenodo.20613701](https://doi.org/10.5281/zenodo.20613701); 3.4.0 has not been deposited yet.
 
 ---
 

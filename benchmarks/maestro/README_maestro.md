@@ -59,9 +59,17 @@ Columns that truly need 64 bits, or that are floating point, stay as‑is and sh
 | `README.md`          | This file |
 
 The header `smart2raw.h` is **not** duplicated here — the maestro finds it in the
-repository's `include/`. The native engine (`s2r_kernels.dll` / `.so`) is a build
-artifact and is **not** committed to git; the maestro builds it on first run, or
-you can drop a prebuilt one beside the script (see below).
+repository's `include/`. It searches in this order, and the repository copy always
+wins, so a checkout can never be benchmarked against a stale vendored header:
+
+1. `$SMART2RAW_INCLUDE` — explicit override
+2. `../../include/smart2raw.h` — the repository's canonical header
+3. `../include/`, `./include/`, `./smart2raw.h` — only for when this folder has
+   been copied out on its own
+
+The native engine (`s2r_kernels.dll` / `.so`) is a build artifact and is **not**
+committed to git; the maestro builds it on first run, or you can drop a prebuilt
+one beside the script (see below).
 
 ---
 

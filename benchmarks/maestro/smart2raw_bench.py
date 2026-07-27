@@ -234,10 +234,26 @@ S2RB_EXPORT uint64_t s2rb_count_gt(const void *p, size_t n, int width, int64_t k
 '''
 
 def find_header(here):
+    """Locate smart2raw.h. The repository's include/ always wins over a local copy.
+
+    README_maestro.md states the header is "not duplicated here - the maestro finds
+    it in the repository's include/". But this folder sits two levels below the repo
+    root (benchmarks/maestro/), so the only repo-relative candidate was
+    "../include", which resolves to benchmarks/include/ and never exists. The lookup
+    therefore always fell through to a vendored copy beside the script, and that
+    copy silently drifted out of sync with include/smart2raw.h - so the benchmark
+    could be measuring a stale core while reporting the current version string.
+
+    Order matters: the repo header is checked BEFORE any local one, so running
+    inside a checkout always measures the current core even if an old vendored copy
+    is still lying around. The local candidates stay last so the folder keeps
+    working when it is copied out on its own, as the README advertises.
+    """
     cands = [os.environ.get("SMART2RAW_INCLUDE",""),
-             os.path.join(here,"smart2raw.h"),
-             os.path.join(here,"include","smart2raw.h"),
-             os.path.join(here,"..","include","smart2raw.h")]
+             os.path.join(here,"..","..","include","smart2raw.h"),   # repo root/include
+             os.path.join(here,"..","include","smart2raw.h"),        # copied one level down
+             os.path.join(here,"include","smart2raw.h"),             # vendored subfolder
+             os.path.join(here,"smart2raw.h")]                       # vendored beside script
     for c in cands:
         if c and os.path.isfile(c):
             return os.path.dirname(os.path.abspath(c))

@@ -44,9 +44,16 @@ S2R_API int64_t  s2r_capi_get_signed(const S2RPool *p, size_t i)  { return s2r_g
 S2R_API size_t s2r_capi_count(const S2RPool *p)      { return p ? p->count : 0; }
 S2R_API int    s2r_capi_class_bits(const S2RPool *p) { return p ? (int)p->size : 0; }   /* negative = signed */
 S2R_API size_t s2r_capi_used_bytes(const S2RPool *p) { return p ? s2r_used_bytes(p) : 0; }
+/* Authoritative signedness. A binding must NOT track this on its own: a pool's
+ * signedness is fixed when it is created and only the C side knows it. */
+S2R_API int    s2r_capi_is_signed(const S2RPool *p)  { return p ? s2r_is_signed(p) : 0; }
 
 /* --- reductions --- */
 S2R_API uint64_t s2r_capi_sum(const S2RPool *p)       { return s2r_sum(p); }
+/* Was missing, leaving bindings with no correct way to sum a signed pool:
+ * s2r_sum reads the payload zero-extended, which is right for u8..u64 and wrong
+ * for i8..i32 (an i8 pool of {-1,-128,-5,100} summed to 734 instead of -34). */
+S2R_API int64_t  s2r_capi_sum_signed(const S2RPool *p){ return s2r_sum_signed(p); }
 S2R_API uint64_t s2r_capi_sum_fast(const S2RPool *p)  { return s2r_sum_fast(p); }
 S2R_API uint64_t s2r_capi_min(const S2RPool *p)       { return s2r_min(p); }
 S2R_API uint64_t s2r_capi_max(const S2RPool *p)       { return s2r_max(p); }

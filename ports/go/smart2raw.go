@@ -19,6 +19,10 @@ const (
 	FlagSigned    = byte(1)
 )
 
+// maxSliceLen is the largest value representable as an int on this platform.
+// Used to reject a declared element count that could not be indexed anyway.
+const maxSliceLen = uint64(^uint(0) >> 1)
+
 type Class int8
 
 const (
@@ -422,18 +426,38 @@ func Load(path string) (*Pool, error) {
 	if !validClass(class) {
 		return nil, ErrBadFormat
 	}
-	flags, fmt := b[5], b[6]
+	flags, fmt, rsvd := b[5], b[6], b[7]
 	if fmt != FormatVersion {
+		return nil, ErrBadFormat
+	}
+	if rsvd != 0 {
 		return nil, ErrBadFormat
 	}
 	if class.Signed() != ((flags & FlagSigned) != 0) {
 		return nil, ErrBadFormat
 	}
-	count := int(binary.LittleEndian.Uint64(b[8:16]))
-	payloadLen := count * class.ElemBytes()
-	if len(b) != 16+payloadLen+4 {
+	// The declared count is attacker-controlled. Converting it to a signed int
+	// and multiplying by the element size wrapped: a header claiming
+	// count=0x8000000000000002 with class 16 produced payloadLen==4, so a 24-byte
+	// file passed the length check and decoded as a 2-element pool.
+	//
+	// Derive the count from the file instead of trusting it: the payload is
+	// exactly len(b)-20 bytes, so divide rather than multiply. No overflow is
+	// reachable, and the declared count must agree exactly.
+	declared := binary.LittleEndian.Uint64(b[8:16])
+	elemBytes := uint64(class.ElemBytes())
+	if elemBytes == 0 {
 		return nil, ErrBadFormat
 	}
+	payloadBytes := uint64(len(b)) - 20
+	if payloadBytes%elemBytes != 0 || payloadBytes/elemBytes != declared {
+		return nil, ErrBadFormat
+	}
+	if declared > uint64(maxSliceLen) {
+		return nil, ErrBadFormat
+	}
+	count := int(declared)
+	payloadLen := count * class.ElemBytes()
 	payload := b[16 : 16+payloadLen]
 	stored := binary.LittleEndian.Uint32(b[16+payloadLen:])
 	if crc32.ChecksumIEEE(payload) != stored {

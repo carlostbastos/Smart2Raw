@@ -144,10 +144,19 @@ class Smart2RawPool:
         return self
 
     def get(self, index: int) -> int:
+        # The JS and Go ports reject a negative index; Python's list would have
+        # silently wrapped it (pool.get(-1) returning the last element).
+        if index < 0 or index >= len(self._values):
+            raise IndexError("index out of range")
         return self._values[index]
 
     def set(self, index: int, value: int) -> "Smart2RawPool":
         v = _as_int(value)
+        # Validate the index BEFORE widening. _ensure_fits mutates self.size, so an
+        # out-of-range set used to promote the class and change byte_length (and the
+        # on-disk class) on its way to raising IndexError.
+        if index < 0 or index >= len(self._values):
+            raise IndexError("index out of range")
         self._ensure_fits(v)
         self._values[index] = v
         return self
@@ -221,10 +230,20 @@ class Smart2RawPool:
             raise S2RFormatError("reserved header byte must be zero")
         if fmt != FORMAT_VERSION:
             raise S2RFormatError(f"unsupported format version: {fmt}")
-        signed = (flags & FLAG_SIGNED) != 0 or size < 0
-        if (size < 0) != signed:
+        # SPEC "Class rules": a signed class requires flags bit 0 set, an unsigned
+        # class requires it clear. Deriving `signed` as the OR of the two made the
+        # check below unreachable for (size < 0, flags == 0), so a signed class with
+        # a missing flag was accepted here while the Go port rejected the same bytes.
+        signed = size < 0
+        if signed != ((flags & FLAG_SIGNED) != 0):
             raise S2RFormatError("class sign and signed flag disagree")
-        width = byte_width(size)
+        try:
+            width = byte_width(size)
+        except ValueError as exc:
+            # byte_width raises a bare ValueError while every other failure here
+            # raises S2RFormatError, so a caller catching the specific exception
+            # type silently missed a corrupt class byte.
+            raise S2RFormatError(f"invalid class byte: {size}") from exc
         payload_len = int(count) * width
         expected = 16 + payload_len + 4
         if len(data) != expected:

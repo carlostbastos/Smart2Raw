@@ -277,7 +277,16 @@ export class Smart2RawPool {
     const flags = view.getUint8(5);
     const fmt = view.getUint8(6);
     if (fmt !== FORMAT_VERSION) throw new Error(`unsupported .s2r format version: ${fmt}`);
-    const signed = (flags & FLAG_SIGNED) !== 0 || size < 0;
+    // SPEC_s2r_format.md rule 5: the reserved byte must be zero. Only the Python
+    // port enforced this, so C, JS and Go all accepted files Python rejected.
+    if (view.getUint8(7) !== 0) throw new Error('corrupt .s2r: reserved header byte must be zero');
+    // SPEC "Class rules": a signed class requires flags bit 0 set, an unsigned
+    // class requires it clear. Deriving `signed` as the OR of the two silently
+    // accepted a file whose class and flags disagree -- Go rejected the same bytes.
+    const signed = size < 0;
+    if (signed !== ((flags & FLAG_SIGNED) !== 0)) {
+      throw new Error('corrupt .s2r: class and signed flag disagree');
+    }
     const width = byteWidth(size);
     const count = Number(view.getBigUint64(8, true));
     if (!Number.isSafeInteger(count)) throw new Error('too many elements for JavaScript runtime');

@@ -1,7 +1,7 @@
 # Smart2Raw GitHub Package Manifest
 
-Package: Smart2Raw v3.3.7
-DOI: https://doi.org/10.5281/zenodo.20477234 (concept DOI, resolves to latest; this release v3.3.7: 10.5281/zenodo.20613701)
+Package: Smart2Raw v3.4.0
+DOI: https://doi.org/10.5281/zenodo.20477234 (concept DOI, resolves to latest; v3.3.7: 10.5281/zenodo.20613701; v3.4.0 not yet deposited)
 License: AGPL-3.0-or-later, with commercial licensing option
 
 ## Included

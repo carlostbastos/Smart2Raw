@@ -64,7 +64,9 @@ _get_s        = _sig("s2r_capi_get_signed", _ct.c_int64, _P, _ct.c_size_t)
 _count        = _sig("s2r_capi_count", _ct.c_size_t, _P)
 _classb       = _sig("s2r_capi_class_bits", _ct.c_int, _P)
 _used         = _sig("s2r_capi_used_bytes", _ct.c_size_t, _P)
+_is_signed    = _sig("s2r_capi_is_signed", _ct.c_int, _P)
 _sum          = _sig("s2r_capi_sum", _ct.c_uint64, _P)
+_sum_s        = _sig("s2r_capi_sum_signed", _ct.c_int64, _P)
 _sumf         = _sig("s2r_capi_sum_fast", _ct.c_uint64, _P)
 _min          = _sig("s2r_capi_min", _ct.c_uint64, _P)
 _max          = _sig("s2r_capi_max", _ct.c_uint64, _P)
@@ -83,26 +85,59 @@ def version():
     return _version().decode()
 
 
+_ERRORS = {
+    -1: "null pointer", -2: "out of memory", -3: "overflow",
+    -4: "invalid size / wrong signedness", -5: "value too large",
+    -6: "value too small", -7: "empty pool", -8: "I/O error", -9: "corrupt data",
+}
+
+
+def _raise_rc(rc, what):
+    raise RuntimeError(f"{what} failed: {_ERRORS.get(rc, f'error {rc}')} (code {rc})")
+
+
 class Pool:
-    """A collection of integers stored in the smallest native class that fits."""
+    """A collection of integers stored in the smallest native class that fits.
+
+    A pool is signed or unsigned for its whole life: that is decided by the class
+    passed to the constructor (S2R_8..S2R_64 vs S2R_I8..S2R_I64) and cannot change
+    afterwards. The C core enforces it; this wrapper reports it.
+    """
 
     def __init__(self, size_bits=S2R_8, capacity=16, _ptr=None):
         self._p = _ptr if _ptr is not None else _new(size_bits, capacity)
         if not self._p:
             raise MemoryError("failed to create S2RPool")
-        self.signed = size_bits < 0
+
+    # Signedness lives in the C pool, not here. It used to be a plain attribute
+    # that push() flipped on the first negative value -- but the underlying pool
+    # stayed unsigned, so the C side rejected the signed push, the return code was
+    # discarded, and the value vanished. Worse, every later read went through the
+    # signed accessors, reinterpreting bytes already stored as unsigned:
+    # Pool(S2R_8); push(200); push(-1) left ONE element that read back as -56.
+    @property
+    def signed(self):
+        return bool(_is_signed(self._p))
 
     # --- insertion ---
     def push(self, v):
-        if self.signed or v < 0:
-            self.signed = True
-            _push_s(self._p, int(v))
+        v = int(v)
+        if self.signed:
+            rc = _push_s(self._p, v)
         else:
-            _push(self._p, int(v))
+            if v < 0:
+                raise ValueError(
+                    f"cannot push {v}: this pool is unsigned. "
+                    "Create it as Pool(S2R_I8) (or another S2R_I* class) for signed data.")
+            rc = _push(self._p, v)
+        if rc != 0:                      # was discarded: OOM looked like success
+            _raise_rc(rc, "push")
+        return self
 
     def extend(self, it):
         for v in it:
             self.push(v)
+        return self
 
     # --- acesso ---
     def __len__(self):
@@ -127,35 +162,53 @@ class Pool:
 
     # --- reductions ---
     def sum(self):
-        return _sum(self._p)
+        # min()/max() already branched on signedness; sum() did not, so a signed
+        # pool summing to -34 came back as 734 (payload read zero-extended).
+        return _sum_s(self._p) if self.signed else _sum(self._p)
+
     def sum_fast(self):
-        return _sumf(self._p)
+        """SIMD-accelerated sum. Unsigned only.
+
+        s2r_sum_fast is contractually 'same result as s2r_sum', i.e. it reads the
+        payload as unsigned; there is no vector kernel for the signed classes. For
+        a signed pool this defers to the exact signed reduction rather than
+        returning a number that merely looks like a sum.
+        """
+        return _sum_s(self._p) if self.signed else _sumf(self._p)
+
     def min(self):
         return _min_s(self._p) if self.signed else _min(self._p)
+
     def max(self):
         return _max_s(self._p) if self.signed else _max(self._p)
 
     # --- safe arithmetic (lazy-carry); returns the new class in bits ---
     def add_scalar(self, s):
-        return _add_safe_s(self._p, int(s)) if self.signed else _add_safe(self._p, int(s))
+        rc = _add_safe_s(self._p, int(s)) if self.signed else _add_safe(self._p, int(s))
+        if rc == 0:                      # 0 = failure, not "class 0 bits"
+            _raise_rc(-2, "add_scalar")
+        return rc
+
     def mul_scalar(self, s):
-        return _mul_safe_s(self._p, int(s)) if self.signed else _mul_safe(self._p, int(s))
+        rc = _mul_safe_s(self._p, int(s)) if self.signed else _mul_safe(self._p, int(s))
+        if rc == 0:
+            _raise_rc(-2, "mul_scalar")
+        return rc
 
     # --- persistence ---
     def save(self, path):
         rc = _save(self._p, path.encode())
         if rc != 0:
-            raise IOError(f"save falhou (codigo {rc})")
+            raise IOError(f"save failed: {_ERRORS.get(rc, rc)} (code {rc})")
 
     @classmethod
     def load(cls, path):
         ptr = _load(path.encode())
         if not ptr:
-            raise IOError(f"load falhou: {path}")
+            raise IOError(f"load failed: {path}")
         obj = cls.__new__(cls)
         obj._p = ptr
-        obj.signed = _classb(ptr) < 0
-        return obj
+        return obj   # signedness is read from the pool, never cached here
 
     def to_list(self):
         return [self[i] for i in range(len(self))]
