@@ -125,6 +125,11 @@ structural, and it is where dictionary encoding genuinely costs.
 `region_id`, 12 distinct values spread over 500..11500, shuffled. Cardinality 12 →
 **4-bit codes**, a sub-byte width this project deliberately refuses.
 
+> **What this data actually is.** The 12 values are `500 + i*1000` — an arithmetic
+> progression, not the arbitrary ids the name suggests. Real region ids would have
+> no common step. The conclusion is unchanged (arbitrary values land in `u16`
+> either way), but the generator should say what it generates.
+
 | | size | `COUNT(x>5500)` |
 |---|---:|---:|
 | Smart2Raw u16 (shipped) | 22.89 MB | **1.00x** (~1.4 ms) |
