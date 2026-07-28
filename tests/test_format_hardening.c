@@ -22,6 +22,7 @@
  */
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "smart2raw.h"
 
@@ -59,6 +60,52 @@ static int loads_ok(const char *fn)
     S2RPool p;
     if(s2r_load_portable(&p, fn) != S2R_OK) return 0;
     s2r_pool_free(&p);
+    return 1;
+}
+
+/* ---- block-wise files, written by hand so the header can lie ---------------
+ *
+ * v3.5.1 fixes a heap overflow found by reading the loader against its own
+ * arithmetic. The body length is nblocks*K + bytes; both terms come off disk
+ * and the sum was done in plain size_t. A file that declares nblocks = 2^22
+ * and bytes = 2^64 - 2^22*K + 16 makes the sum WRAP to 16, so the loader
+ * malloc'd 16 bytes and then memcpy'd 4 MB into it. Everything else about the
+ * file is honest - magic, fmt, classes, nb == ceil(cnt/blk), CRC over the real
+ * body, exact EOF - which is why nothing caught it. Confirmed under ASan as a
+ * heap-buffer-overflow of 4 MB, and as a plain segfault at -O2.
+ *
+ * These write such files by hand. They must all be refused. */
+static void put32(FILE *f, uint32_t v){ int i; for(i=0;i<4;i++) fputc((int)((v>>(8*i))&0xff), f); }
+static void put64(FILE *f, uint64_t v){ int i; for(i=0;i<8;i++) fputc((int)((v>>(8*i))&0xff), f); }
+
+/* count/block/nblocks/bytes are written verbatim - that is the whole point.
+ * body_len bytes of zeroes follow, with a CRC that is always correct. */
+static int write_blocked(const char *fn, uint64_t cnt, uint64_t blk,
+                         uint64_t nblocks, uint64_t bytes_field, size_t body_len)
+{
+    FILE *f = fopen(fn, "wb");
+    uint8_t *body;
+    if(!f) return 0;
+    body = (uint8_t*)calloc(body_len ? body_len : 1, 1);
+    if(!body){ fclose(f); return 0; }
+    put32(f, (uint32_t)S2R_MAGIC_V33);
+    fputc(0, f); fputc(0, f); fputc((int)S2R_BLK_FMT, f); fputc(0, f);
+    put64(f, cnt); put64(f, blk); put64(f, nblocks);
+    fputc((int)(uint8_t)S2R_8, f); fputc((int)(uint8_t)S2R_8, f);
+    fputc((int)(uint8_t)S2R_8, f); fputc((int)(uint8_t)S2R_8, f);
+    put64(f, bytes_field);
+    if(body_len) fwrite(body, 1, body_len, f);
+    put32(f, body_len ? s2r_crc32(body, body_len, 0) : 0);
+    fclose(f);
+    free(body);
+    return 1;
+}
+
+static int blocked_loads_ok(const char *fn)
+{
+    S2RBlocked b;
+    if(s2r_blocked_load(&b, fn) != S2R_OK) return 0;
+    s2r_blocked_free(&b);
     return 1;
 }
 
@@ -198,6 +245,50 @@ int main(void)
         CHECK(s2r_map_open(&m, "/tmp/s2r_h_sgm.s2r",  1) != S2R_OK, "mmap: class/flag disagreement accepted");
     }
 #endif
+
+    /* ---- 6. block-wise loader: the body length must be real ----
+     * Regression for the v3.5.1 heap overflow. See write_blocked() above. */
+    {
+        const uint64_t K = 6;               /* 2 + four 1-byte metadata classes */
+        const uint64_t NB = 1ull << 22;     /* malloc(NB) succeeds, so the copy runs */
+        S2RBlocked rb;
+        uint64_t src[512];
+        size_t i;
+
+        /* a. the length wraps: nblocks*K + bytes == 16 in size_t arithmetic */
+        write_blocked("/tmp/s2r_h_bwrap.s2r", NB, 1, NB, (uint64_t)0 - NB*K + 16, 16);
+        CHECK(!blocked_loads_ok("/tmp/s2r_h_bwrap.s2r"),
+              "blocked: wrapped body length accepted (heap overflow)");
+
+        /* b. the length does not wrap, it is simply not in the file. Rejecting
+         *    this also means a 64-byte file can no longer ask for a gigabyte. */
+        write_blocked("/tmp/s2r_h_bbig.s2r", 1, 1, 1, 1ull << 30, 8);
+        CHECK(!blocked_loads_ok("/tmp/s2r_h_bbig.s2r"),
+              "blocked: payload larger than the file accepted");
+
+        /* c. the multiplication itself overflows, before bytes is even added */
+        write_blocked("/tmp/s2r_h_bnb.s2r", (uint64_t)(SIZE_MAX/4), 1,
+                      (uint64_t)(SIZE_MAX/4), 0, 8);
+        CHECK(!blocked_loads_ok("/tmp/s2r_h_bnb.s2r"),
+              "blocked: nblocks*metadata overflow accepted");
+
+        /* d. and an honest file written by the library must still load. A guard
+         *    that also rejects real data is not a fix. */
+        for(i=0;i<512;i++) src[i] = 1000 + (i % 7) * 3;
+        if(s2r_blocked_build(&rb, src, 512, 64)){
+            uint64_t sum_before = 0, sum_after = 0;
+            S2RBlocked lb;
+            for(i=0;i<512;i++) sum_before += src[i];
+            CHECK(s2r_blocked_save(&rb, "/tmp/s2r_h_bok.s2r") == S2R_OK,
+                  "blocked: honest file failed to save");
+            s2r_blocked_free(&rb);
+            CHECK(s2r_blocked_load(&lb, "/tmp/s2r_h_bok.s2r") == S2R_OK,
+                  "blocked: honest file rejected by the new guard");
+            for(i=0;i<512;i++) sum_after += s2r_blocked_get(&lb, i);
+            CHECK(sum_after == sum_before, "blocked: honest file misread");
+            s2r_blocked_free(&lb);
+        } else CHECK(0, "blocked: could not build the baseline");
+    }
 
     printf("=== %d OK, %d FAIL ===\n", pass, fail);
     return fail ? 1 : 0;
