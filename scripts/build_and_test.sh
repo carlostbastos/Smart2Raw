@@ -50,7 +50,12 @@ run "Edge x86 -O2"                             -O2 test_regressao.c
 run "No SIMD (-DS2R_NO_SIMD)"                  -O2 -DS2R_NO_SIMD test_regressao.c
 run "Strict ISO C11 (-pedantic)"              -O2 -std=c11 -pedantic test_regressao.c
 run "MCU -Os (no stdio/mmap/simd)"             -Os -DS2R_NO_STDIO -DS2R_NO_MMAP -DS2R_NO_SIMD mcu_core.c
-echo "-- Emulated hardware (real code on x86; CI repeats on real ARM/BE/RISC-V via QEMU) --"
+# The kernels below are the ones that ship. They run on this x86 host against the
+# scalar reference with the emulated VECTOR LENGTH SWEPT - which one real board
+# cannot give you, since a board has a single length. CI separately repeats the
+# whole suite on real arm64 and real big-endian (s390x) through QEMU. There is no
+# riscv64 job yet, so RVV is covered by the sweep and not by a second machine.
+echo "-- Emulated hardware (shipping kernels on x86, vector length swept; CI repeats on real ARM/BE via QEMU) --"
 run "NEON ARM emulated (26)"                   -O2 -D__ARM_NEON=1 test_neon_emu.c
 run "Big-endian emulated (6)"                  -O2 test_be_emu.c
 run "RISC-V RVV emulated (logic)"              -O2 -DS2R_FORCE_RVV=1 test_rvv_emu.c
