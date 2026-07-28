@@ -12,3 +12,6 @@ _to_delete/
 /*.s2r
 __pycache__/
 *.pyc
+
+# artefatos de build da pasta web/ (o dist/ e versionado)
+web/out/
