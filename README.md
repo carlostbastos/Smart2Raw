@@ -2,10 +2,10 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20477234.svg)](https://doi.org/10.5281/zenodo.20477234)
 [![License: AGPL v3+](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.3.7-informational.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.4.0-informational.svg)](CHANGELOG.md)
 [![Language: C11](https://img.shields.io/badge/C-C11-00599C.svg)](include/smart2raw.h)
 [![Header-only](https://img.shields.io/badge/build-header--only-success.svg)](include/smart2raw.h)
-[![Tests](https://img.shields.io/badge/tests-17%20suites%20%C2%B7%200%20failures-brightgreen.svg)](scripts/build_and_test.sh)
+[![Tests](https://img.shields.io/badge/tests-25%20suites%20%C2%B7%200%20failures-brightgreen.svg)](scripts/build_and_test.sh)
 [![Ports](https://img.shields.io/badge/ports-Go%20%C2%B7%20JS%20%C2%B7%20Python-blueviolet.svg)](ports/)
 
 **Adaptive numeric storage for integer data.**
@@ -22,8 +22,9 @@ Instead of storing everything as `int64` or `int32` by default, Smart2Raw scans 
 
 ## Table of contents
 
+- [What's new in 3.5.0](#whats-new-in-350)
+- [What's new in 3.4.0](#whats-new-in-340)
 - [What's new in 3.3.7](#whats-new-in-337)
-- [What's new in 3.3.6](#whats-new-in-336)
 - [Why this matters](#why-this-matters)
 - [What Smart2Raw is](#what-smart2raw-is)
 - [What Smart2Raw is not](#what-smart2raw-is-not)
@@ -48,6 +49,125 @@ Instead of storing everything as `int64` or `int32` by default, Smart2Raw scans 
 - [One-sentence summary](#one-sentence-summary)
 
 ---
+
+## What's new in 3.5.0
+
+Release 3.5.0 is one idea: **the frame of reference gains a scale.**
+
+v3.4.0 removed an OFFSET the data did not need - `v = base + delta`. It did not
+remove a SCALE. A column of `{500, 1500, ... 11500}` spans 11000 and therefore
+takes 14 bits, but every value is `base + 1000*i` with `i` in 0..11: four bits of
+index wearing a fourteen-bit coat.
+
+```text
+v = base + stride * i        stride = gcd, over the block, of (v - base)
+```
+
+The common step is the gcd of the offsets, one pass to find, and dividing it out
+is exact by construction. **This is not a dictionary**: there is no lookup table
+and no per-value indirection - the map is a closed-form affine function, so every
+operation rewrites in the index domain and the stored bytes remain the native
+integers they always were.
+
+```text
+v > t          <=>   i > (t - base) / stride          integer division
+v in [lo,hi]   <=>   i in [ceil((lo-base)/stride), floor((hi-base)/stride)]
+SUM(v)         =     n*base + stride*SUM(i)
+```
+
+- **`S2RBlocked` gains a per-block stride.** `s2r_blocked_stride()` reports it;
+  every other entry point is unchanged. `stride == 1` is exactly v3.4.0, the same
+  way `base == 0` was exactly v3.3.
+- **`S2RAffine`, the flat affine pool.** A whole column often has a single common
+  step - a sampling interval, a fixed-point granularity, an ID allocated in fixed
+  increments. The index pool is a plain `S2RPool`, so every shipped SIMD kernel
+  serves it with no second implementation. The index pool is always *unsigned*,
+  even for a signed column: offsets from the minimum cannot be negative, so the
+  sign lives in the base alone.
+- **`fmt = 3`** adds the stride array. A writer emits it only when some block
+  actually has a stride above 1, so a column without one is byte-for-byte the file
+  v3.4.0 wrote and a v3.4.0 reader still opens it.
+
+Measured, 12M elements, 12 distinct values over 500..11500, shuffled, AVX2:
+
+| representation | size | `COUNT(x>5500)` | vs flat pool |
+|---|---:|---:|---:|
+| flat `u16` pool (v3.4.0) | 22.89 MB | 1.033 ms | 1.00x |
+| `S2RBlocked` v3.4.0 (no stride) | 22.90 MB | 1.042 ms | 0.99x |
+| `S2RBlocked` v3.5.0, block 16384 | **11.45 MB** | **0.464 ms** | **2.23x** |
+| `S2RAffine` v3.5.0 | **11.44 MB** | **0.468 ms** | **2.21x** |
+
+**Honest scope.** The gain is conditional on the data having real granularity -
+fixed sampling intervals, fixed-point money, quantization steps. On arbitrary
+values the gcd is 1 and the classification is byte-for-byte what v3.4.0 produced.
+And it does not reverse the warehouse benchmark's regime B: with the stride
+factored out we are still 2x larger and 1.44x slower than 4-bit dictionary codes,
+because 12 distinct values need log2(12) = 3.58 bits and the smallest native class
+is 8. That absence is the design decision that buys 7.9 ms -> 0.00 ms of
+materialisation, not an oversight.
+
+### Gap audit: four more things that were escaping
+
+- **Established order on the flat pool.** The block-wise layer has answered by
+  binary search since v3.4.0; the flat pool ignored order entirely. `S2R_FLAG_SORTED`
+  is cleared by every write and set only by `s2r_sort()` and `s2r_mark_sorted()`.
+  Appending in order keeps it - the ingest pattern that matters. Measured on 8M
+  sorted `u8`: `count_gt` 0.371 ms -> below the clock, `count_range` 0.363 ms ->
+  below the clock.
+- **Healing across the sign boundary.** A column declared signed that never
+  receives a negative sat twice as wide as it needed. `s2r_fit_class_signedness()`
+  heals both; 8M values in 0..200 go from 15.26 MB to 7.63 MB. Separate entry
+  point on purpose: after healing, a negative push is refused.
+- **A constant column carries zero bits.** `S2RAffine` now stores no payload at
+  all: 7.63 MB -> 0 bytes, every predicate O(1).
+- **The four missing block-wise predicates.** `s2r_blocked_count_lt/_eq/_range`
+  and `_sum_if`, with zone skipping - which is worth more to a bounded window than
+  to a one-sided threshold.
+
+**Still open, and stated rather than hidden:** a boolean column takes 8x a
+bitmap's space and popcount is ~17x faster than our `count_gt`. The floor is
+arithmetic - k distinct values need log2(k) bits and the smallest native class is
+8. Closing it needs a sub-byte class, which trades away the property the whole
+project buys (7.9 ms -> 0.00 ms of materialisation). That is a scope decision, not
+a bug.
+
+**31 test suites, 0 failures.** See [`CHANGELOG.md`](CHANGELOG.md).
+
+## What's new in 3.4.0
+
+Release 3.4.0 is a correctness, contract and performance release: no new
+capability, but a long list of things that were quietly wrong or quietly slow.
+
+- **The `.s2r` reader now obeys its own specification.** Header flags were adopted
+  verbatim from disk, so a crafted `EXTERNAL` bit leaked every loaded pool
+  (confirmed under AddressSanitizer) and `READONLY` froze it. `fmt`, the reserved
+  byte, class/flag agreement and exact file length are enforced now - every one of
+  those was accepted by C and rejected by at least one port, so `.s2r` was not the
+  portable contract it claimed to be. The Go reader also accepted a declared count
+  that wrapped when converted to `int`.
+- **Two classes of undefined behaviour, fixed.** `s2r_mul_scalar` at u16 promoted
+  to `int` and overflowed `INT_MAX` - on the very path whose correctness proof
+  requires *defined* wraparound. The signed sum accumulators used `int64_t` where
+  their unsigned twins had always used `uint64_t`.
+- **SIMD dispatch for the whole predicate family.** `sum_fast` used to be the only
+  dispatched operation; every filter ran scalar. The family reduces to one range
+  kernel - `count_gt`/`lt`/`eq` *are* ranges - and the signed case falls out of the
+  same kernel by two's complement. Measured 4.5x-13.4x.
+- **Frame of reference in the block-wise (PFOR) layer.** A block's class came from
+  its maximum alone, so a block of `{9000000000, 9000000001, ...}` was stored as
+  `u64` despite spanning 1. Measured 3.9x on unix timestamps, 7.7x on sequential
+  IDs, 170x on a constant column, and exact parity where the baseline is already
+  zero. Plus zone statistics (`SUM`/`MAX`/`MIN` in O(nblocks), 114x faster),
+  sorted blocks answering `count_gt` by binary search above a measured size gate,
+  and block-wise `.s2r` serialization.
+- **ARM SVE2 was unreachable dead code** behind NEON, *and* 8x too narrow;
+  rewritten around UDOT. RISC-V RVV widened the same way. Both stay experimental.
+- **25 test suites** (was 17), including 142,952 checks that sweep every threshold
+  and every ordered pair of range endpoints for the 8-bit classes. CI gained
+  ASan+UBSan, jobs for the three ports and a conformance job - and can now actually
+  fail, which it could not before.
+
+See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## What's new in 3.3.7
 
@@ -79,7 +199,7 @@ See [`docs/ANALYTICS_V2.md`](docs/ANALYTICS_V2.md) and [`CHANGELOG.md`](CHANGELO
 
 Many systems store small values in unnecessarily large types.
 
-A sensor temperature like `25` does not need 64 bits. An age fits in `u8`. HTTP status codes fit in `u16`. Many counters, flags, categories, buckets, local IDs, token IDs and discrete measurements use only a fraction of the bits normally reserved for them.
+A sensor temperature like `25` does not need 64 bits. An age fits in `u8`. HTTP status codes fit in `u16`. Many counters, categories, buckets, local IDs, token IDs and discrete measurements use only a fraction of the bits normally reserved for them.
 
 At small scale, this looks harmless. At millions or billions of values, it becomes expensive:
 
@@ -277,6 +397,12 @@ This avoids silent overflow and truncation.
 
 ### Bidirectional width healing
 
+> **Width, and since 3.5.0 the sign too — but only when asked.** `fit_class()`
+> narrows the WIDTH and never touches signedness, because dropping the sign
+> changes the contract: afterwards a negative push is refused. `fit_class_signedness()`
+> heals both, deliberately, for the caller who knows the column will stay
+> non-negative. Until 3.5.0 there was no way to reclaim that 2x at all.
+
 If an outlier forces a pool to grow and that outlier is later removed, the pool can be reclassified back to a smaller width.
 
 ```text
@@ -447,6 +573,28 @@ int         s2r_has_avx2(void);
 
 ---
 
+## Choosing a representation
+
+Since 3.5.0 the library answers this for you — `s2r_recommend()` measures all three
+forms and names the one to use. It exists because the obvious entry point is the
+worst one. Measured on 4M unix timestamps sampled every 60 s:
+
+| form | size | `count_gt` |
+|---|---:|---:|
+| `S2RPool` (the obvious choice) | 15.26 MB | 0.73 ms |
+| `S2RBlocked`, auto block | **4.11 MB** | **0.04 ms** |
+
+3.7x the memory and 18x the time, for reaching for the flat pool on a
+time-partitioned column. Any column whose values drift slowly — timestamps,
+monotonic ids, sensor readings around a setpoint — belongs in the block-wise form.
+
+`S2R_BLOCK_DEFAULT` is 256, a **default and not an optimum**: measured across three
+real shapes it is dominated on two. Since 3.5.0 `s2r_blocked_build_auto()` prices
+every candidate from one pass and picks; `s2r_blocked_plan()` hands you the whole
+frontier if you would rather choose.
+
+---
+
 ## The `.s2r` file format
 
 A self-describing, portable file. All multibyte fields are **canonical little-endian**. A fixed 16-byte header lets an mmap reader locate the payload at a constant offset. Full spec: [`docs/S2R_FORMAT.md`](docs/S2R_FORMAT.md).
@@ -492,12 +640,17 @@ Operational data is often integer-heavy:
 - latency buckets;
 - error codes;
 - counters;
-- flags;
 - metric windows;
 - local IDs;
 - compact event types.
 
 Smart2Raw can reduce memory footprint and accelerate scans, counts, sums and filters.
+
+> **Not boolean flags.** A two-valued column takes 8x a bitmap's space here, and
+> popcount answers it ~17x faster than `count_gt`. The floor is arithmetic: k
+> distinct values need log2(k) bits and the smallest native class is 8. A bitmap
+> is the right tool for a flag column, and this is not one.
+
 
 ### Lightweight analytics
 
@@ -512,7 +665,6 @@ Many tabular ML features are discrete:
 - categories;
 - buckets;
 - IDs;
-- flags;
 - ranges;
 - counters;
 - quantized features.
@@ -650,11 +802,39 @@ Actual speedups depend on the hardware, compiler, data distribution, working-set
 | Block-wise width with 0.01% outliers | ~3.7x memory recovery |
 | SIMD block sum for zero-point support | ~6.7x |
 | Class-based zone-map scan | up to 94.5% bandwidth avoided in measured scenario |
+| Affine factoring on a stride-bearing column (3.5.0) | 2.00x memory, 2.21x predicate |
+| Predicate on a pool of established order (3.5.0) | O(n) -> O(log n) |
+| Sign healing on a signed column with no negatives (3.5.0) | 2.00x memory |
+| Flat-pool summary pruning a predicate (3.5.0) | 0.144 ms -> 0.000034 ms |
+| Cumulative index, narrow class (3.5.0) | 4231x, 2 KB, pays back in 11 queries |
+| Recommended form vs the obvious entry point (3.5.0) | 3.7x memory, 18x time |
 | MCU build without stdio/mmap/SIMD | ~3.4 KB |
 
 These numbers are not universal promises. They show where the mechanism works. Server-capacity figures elsewhere in the project are **model estimates**, clearly labeled as such, not measurements of a real server.
 
 **Run it on your own data.** [`benchmarks/maestro/`](benchmarks/maestro/) is an interactive terminal benchmark — standard-library Python, no numpy — that compares conventional `int64`, **SQLite**, and Smart2Raw on the same dataset: memory, on-disk size, query speed (`SUM`/`COUNT`) and SIMD throughput, driven through the library's real C kernels via `ctypes`. Point it at any integer CSV to see the figures on your machine.
+
+---
+
+## What Smart2Raw cannot do to your data
+
+Every classical alternative has a regime where it **expands** the input. Measured
+on 4M elements against a 30.52 MB `int64` baseline: dictionary encoding of a
+high-cardinality column stores a dictionary the size of the data (41.01 MB, 34%
+*larger* than raw); RLE on unordered data stores one run per value (30.52 MB, no
+compression at all); a bitmap only exists when there are two distinct values.
+
+Smart2Raw cannot expand, and not by luck. It classifies by **range**, so the worst
+case is "the range needs 64 bits" — which *is* the `int64` input. The widest class
+is the baseline. That bound is asserted in the test suite, not claimed in prose.
+
+Reproduce the whole table — every format on every shape, each size asserted before
+it is printed:
+
+```sh
+cc -O2 -std=c11 -I include benchmarks/format_matrix.c -o format_matrix
+./format_matrix 4000000
+```
 
 ---
 
@@ -705,7 +885,7 @@ bash scripts/build_and_test.sh
 Expected result:
 
 ```text
-17 suites OK, 0 failures
+31 suites OK, 0 failures
 ```
 
 Build the tools and examples:
@@ -834,7 +1014,7 @@ NOTICE
 
 If you use Smart2Raw in research, benchmarks, papers, reports, products or technical comparisons, please cite the project using [`CITATION.cff`](CITATION.cff).
 
-Releases are archived on Zenodo with versioned DOIs under the concept DOI [10.5281/zenodo.20477234](https://doi.org/10.5281/zenodo.20477234). This release (3.3.7): [10.5281/zenodo.20613701](https://doi.org/10.5281/zenodo.20613701).
+Releases are archived on Zenodo with versioned DOIs under the concept DOI [10.5281/zenodo.20477234](https://doi.org/10.5281/zenodo.20477234). This release (3.5.0) is [10.5281/zenodo.21623772](https://doi.org/10.5281/zenodo.21623772); the previous 3.4.0 release is [10.5281/zenodo.21614309](https://doi.org/10.5281/zenodo.21614309).
 
 ---
 

@@ -1,24 +1,38 @@
 {
   "title": "Smart2Raw: auto-adaptive integer numeric storage (header-only, C)",
-  "description": "A header-only C library that stores integer arrays in the smallest native class that fits the real range (±8/16/32/64 bits) and operates directly on the compact format. Includes aggregations and SIMD with runtime dispatch (AVX2 and AVX-512 on x86, NEON on ARM; experimental RVV and SVE2), block-wise width (PFOR) signed and unsigned, zero-copy mmap, portable serialization with CRC32 and analytics. Ships with a whitepaper, a test suite (17 suites) and reproducible benchmarks.",
+  "description": "A header-only C library that stores integer arrays in the smallest native class that fits the real range (±8/16/32/64 bits) and operates directly on the compact format. Includes SIMD-dispatched aggregations AND predicates with runtime dispatch (AVX2 and AVX-512 on x86, NEON on ARM; experimental RVV and SVE2), block-wise width (PFOR) signed and unsigned with frame of reference and zone statistics, zero-copy mmap, portable serialization with CRC32 and analytics. Ships with a whitepaper, a test suite (25 suites, 0 failures) and reproducible benchmarks.",
   "upload_type": "software",
   "license": "AGPL-3.0-or-later",
-  "version": "3.3.7",
+  "version": "3.5.0",
+  "publication_date": "2026-07-27",
   "creators": [
     {
-      "name": "Terêncio Bastos, Carlos Alberto"
+      "name": "Terêncio de Bastos, Carlos Alberto"
     }
   ],
   "keywords": [
     "integer storage",
     "adaptive bit-width",
     "SIMD",
+    "vectorized predicates",
     "PFOR",
+    "frame of reference",
+    "zone map",
+    "columnar storage",
+    "binary format",
     "cache efficiency",
     "edge computing",
     "quantization",
+    "reproducible benchmarks",
     "C",
     "header-only"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/carlostbastos/Smart2Raw/tree/v3.4.0",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
   ],
   "access_right": "open"
 }
