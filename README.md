@@ -2,10 +2,10 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20477234.svg)](https://doi.org/10.5281/zenodo.20477234)
 [![License: AGPL v3+](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.4.0-informational.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.5.1-informational.svg)](CHANGELOG.md)
 [![Language: C11](https://img.shields.io/badge/C-C11-00599C.svg)](include/smart2raw.h)
 [![Header-only](https://img.shields.io/badge/build-header--only-success.svg)](include/smart2raw.h)
-[![Tests](https://img.shields.io/badge/tests-25%20suites%20%C2%B7%200%20failures-brightgreen.svg)](scripts/build_and_test.sh)
+[![Tests](https://img.shields.io/badge/tests-31%20suites%20%C2%B7%200%20failures-brightgreen.svg)](scripts/build_and_test.sh)
 [![Ports](https://img.shields.io/badge/ports-Go%20%C2%B7%20JS%20%C2%B7%20Python-blueviolet.svg)](ports/)
 
 **Adaptive numeric storage for integer data.**
@@ -22,6 +22,7 @@ Instead of storing everything as `int64` or `int32` by default, Smart2Raw scans 
 
 ## Table of contents
 
+- [Security fix in 3.5.1](#security-fix-in-351)
 - [What's new in 3.5.0](#whats-new-in-350)
 - [What's new in 3.4.0](#whats-new-in-340)
 - [What's new in 3.3.7](#whats-new-in-337)
@@ -49,6 +50,22 @@ Instead of storing everything as `int64` or `int32` by default, Smart2Raw scans 
 - [One-sentence summary](#one-sentence-summary)
 
 ---
+
+## Security fix in 3.5.1
+
+`s2r_blocked_load()` sized the body it was about to read as
+`nblocks*metadata + bytes`, in unchecked `size_t`, with both terms taken from
+disk. A 64-byte `.s2r` that passes every existing validation — magic, `fmt`,
+classes, `nblocks == ceil(count/block)`, a **correct CRC32**, exact EOF — could
+make that sum wrap to 16 and get a 4 MB copy into a 16-byte allocation
+(heap-buffer-overflow under ASan, segfault at `-O2`).
+
+Fixed with checked arithmetic and a requirement that the declared body actually
+fit in the file. Affects only callers who load `.s2r` files they did not write;
+writing and the flat pool were never affected. Regression test in
+`tests/test_format_hardening.c`, section 6. No API or format change:
+3.5.0 and 3.5.1 read each other's files byte for byte.
+See [`RELEASE_NOTES_v3.5.1.md`](RELEASE_NOTES_v3.5.1.md).
 
 ## What's new in 3.5.0
 

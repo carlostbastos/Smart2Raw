@@ -6,7 +6,7 @@ Thanks for your interest! Simple rules:
    estimates as estimates. PRs with numbers must include how to reproduce them.
 2. **No external dependencies in the header.** `include/smart2raw.h` is
    header-only and must compile cleanly under `-std=c11 -pedantic -Wall -Wextra`.
-3. **Tests required.** `scripts/build_and_test.sh` must pass (15 suites,
+3. **Tests required.** `scripts/build_and_test.sh` must pass (31 suites,
    0 failures) in every configuration before merging. New features come with
    tests in `tests/` and, if there is a performance number, a benchmark in
    `benchmarks/`.

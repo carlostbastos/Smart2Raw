@@ -1,10 +1,10 @@
 {
   "title": "Smart2Raw: auto-adaptive integer numeric storage (header-only, C)",
-  "description": "A header-only C library that stores integer arrays in the smallest native class that fits the real range (±8/16/32/64 bits) and operates directly on the compact format. Includes SIMD-dispatched aggregations AND predicates with runtime dispatch (AVX2 and AVX-512 on x86, NEON on ARM; experimental RVV and SVE2), block-wise width (PFOR) signed and unsigned with frame of reference and zone statistics, zero-copy mmap, portable serialization with CRC32 and analytics. Ships with a whitepaper, a test suite (25 suites, 0 failures) and reproducible benchmarks.",
+  "description": "A header-only C library that stores integer arrays in the smallest native class that fits the real range (±8/16/32/64 bits) and operates directly on the compact format. Includes SIMD-dispatched aggregations AND predicates with runtime dispatch (AVX2 and AVX-512 on x86, NEON on ARM; experimental RVV and SVE2), block-wise width (PFOR) signed and unsigned with frame of reference and zone statistics, zero-copy mmap, portable serialization with CRC32 and analytics. Ships with a whitepaper, a test suite (31 suites, 0 failures) and reproducible benchmarks.",
   "upload_type": "software",
   "license": "AGPL-3.0-or-later",
-  "version": "3.5.0",
-  "publication_date": "2026-07-27",
+  "version": "3.5.1",
+  "publication_date": "2026-07-28",
   "creators": [
     {
       "name": "Terêncio de Bastos, Carlos Alberto"

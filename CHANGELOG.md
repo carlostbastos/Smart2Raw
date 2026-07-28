@@ -2,6 +2,80 @@
 
 Versioning follows SemVer. Dates use the YYYY-MM-DD format.
 
+## [3.5.1] - 2026-07-28
+
+Uma correcao de seguranca. Nenhuma API nova, nenhuma mudanca de formato: um
+arquivo `.s2r` escrito pela 3.5.0 e lido identicamente, e um escrito pela 3.5.1 e
+lido pela 3.5.0. **Quem le arquivos `.s2r` de origem nao confiavel deve
+atualizar.**
+
+### Corrigido: `.s2r` em blocos hostil causava escrita fora do heap
+
+O carregador em blocos calcula o tamanho do corpo assim:
+
+    nblocks * (2 + bytes_meta(bcls) + bytes_meta(pcls)
+                 + bytes_meta(ocls) + bytes_meta(scls)
+                 + (tem_passo ? bytes_meta(tcls) : 0))
+    + bytes
+
+Os DOIS termos vem do disco, e a soma era feita em `size_t` puro. Um arquivo que
+declara `nblocks = 2^22` e `bytes = 2^64 - 2^22*6 + 16` faz a soma **dar a volta**
+e virar 16: o carregador faz `malloc(16)` e em seguida copia 4 MB para dentro.
+
+O arquivo tem 64 bytes e passa por TODAS as validacoes que ja existiam - magica,
+`fmt`, as quatro classes, `nblocks == teto(count/block)`, todos os campos
+`<= SIZE_MAX`, **CRC32 correto sobre o corpo real** e EOF exato. Nao ha nada
+malformado nele: o que ele explora e uma conta que fecha errado.
+
+Confirmado com AddressSanitizer como `heap-buffer-overflow` de 4 MB sobre uma
+regiao de 16 bytes, e como falha de segmentacao pura em `-O2` sem sanitizador.
+
+**Quem e afetado:** so quem chama `s2r_blocked_load()` sobre um arquivo que nao
+escreveu. Escrever nunca foi afetado - la os dois termos descrevem uma estrutura
+que ja existe na memoria e nao tem como transbordar. O pool plano nunca foi
+afetado: ele ja fazia `count > SIZE_MAX/eb` desde a 3.3.
+
+### O conserto: duas travas, nenhuma dependencia nova
+
+1. **A conta tem que fechar.** `s2r__blk_body_len_ck()` faz a multiplicacao e a
+   soma em aritmetica checada e devolve o comprimento so quando ele e real. Sem
+   builtin de compilador - a mesma forma de guarda que o carregador plano ja
+   usava (`n > SIZE_MAX/per`), portavel para qualquer C99.
+2. **O corpo tem que estar NO arquivo.** Os bytes em disco sao a unica testemunha
+   honesta do tamanho do corpo, e sao de graca: o arquivo ja esta aberto e e
+   posicionavel. Um `.s2r` de 64 bytes nao pode mais pedir um gigabyte.
+
+### Por que 31 suites nao pegaram
+
+Pelo mesmo motivo da 3.4.1, com o alvo trocado. As suites testam arquivos
+ESCRITOS pela biblioteca, e depois arquivos CORROMPIDOS byte a byte - as duas
+coisas que acontecem sozinhas. Nenhuma testava um arquivo **construido de
+proposito para ser internamente consistente e mentiroso**. Corrupcao acidental e
+CRC quebrado; corrupcao proposital vem com o CRC certo.
+
+### Adicionado: `tests/test_format_hardening.c` secao 6 (46 checagens, era 40)
+
+Quatro checagens novas, escrevendo os cabecalhos a mao:
+
+- o comprimento que da a volta (o arquivo exato acima);
+- um comprimento que nao da a volta, so nao esta no arquivo;
+- a multiplicacao `nblocks * metadados` transbordando sozinha;
+- e um arquivo honesto escrito pela propria biblioteca, que **tem que continuar
+  carregando e somando certo** - uma guarda que tambem recusa dado real nao e um
+  conserto.
+
+Contra o cabecalho da 3.5.0 essa secao aborta com `heap-buffer-overflow` sob
+ASan. Contra o da 3.5.1, passa em `-O2`, `-Os`, C99 e C11 com `-pedantic -Wall
+-Wextra`, e sob ASan+UBSan.
+
+### Corrigido tambem: quatro numeros de suite diferentes na documentacao
+
+`scripts/build_and_test.sh` roda **31 suites** sobre 21 arquivos de teste, e
+sempre foi esse numero que a CI verifica. `.zenodo.json` dizia 25,
+`README.md` dizia 17 e `CONTRIBUTING.md` dizia 15 - todos parados em releases
+antigas. Agora dizem 31, e `SECURITY.md` deixa de dizer que a linha suportada e a
+3.3.x.
+
 ## [3.5.0] - 2026-07-27
 
 DOI: 10.5281/zenodo.21623772
