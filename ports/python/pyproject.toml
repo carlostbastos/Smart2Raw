@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "smart2raw-port"
-version = "3.4.0"
+version = "3.5.0"
 description = "Pure-Python Smart2Raw port for notebooks and conformance fixtures"
 readme = "README.md"
 requires-python = ">=3.9"
