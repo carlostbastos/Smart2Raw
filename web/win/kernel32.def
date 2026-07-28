@@ -1,0 +1,14 @@
+LIBRARY kernel32.dll
+EXPORTS
+GetCommandLineA
+GetStdHandle
+WriteFile
+ReadFile
+CreateFileA
+CloseHandle
+GetFileSizeEx
+ExitProcess
+QueryPerformanceCounter
+QueryPerformanceFrequency
+SetConsoleOutputCP
+VirtualAlloc
