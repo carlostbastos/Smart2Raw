@@ -1,5 +1,5 @@
 /*
- * Smart2Raw v3.5.0 - Adaptive numeric storage (header-only)
+ * Smart2Raw v3.5.1 - Adaptive numeric storage (header-only)
  * Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
  * SPDX-License-Identifier: AGPL-3.0-or-later
  * =======================================================================
@@ -139,8 +139,8 @@ extern "C" {
 
 #define S2R_VERSION_MAJOR 3
 #define S2R_VERSION_MINOR 5
-#define S2R_VERSION_PATCH 0
-#define S2R_VERSION_STRING "3.5.0"
+#define S2R_VERSION_PATCH 1
+#define S2R_VERSION_STRING "3.5.1"
 
 /* ============================================================================
  * CONFIGURATION
@@ -3720,15 +3720,35 @@ static inline int64_t s2r_blocked_sum_if_signed(const S2RBlocked *b, int64_t lo,
  */
 #if S2R_HAS_STDIO
 
+/* nblocks * (per-block metadata) + payload bytes.
+ *
+ * On the WRITE side both terms come from a struct this library built, so the
+ * sum is the size of something that already exists in memory and cannot
+ * overflow. On the READ side both terms come off disk, and a file that says
+ * nblocks = 2^22 and bytes = 2^64 - 2^22*K + 16 makes the sum wrap to 16: the
+ * loader would malloc 16 bytes and then memcpy megabytes into it. So the sum
+ * is done in checked arithmetic and the length is only handed back when it is
+ * real. Portable on purpose - no compiler builtins, same guard style the flat
+ * loader already uses (count > SIZE_MAX/eb). */
+static inline int s2r__blk_body_len_ck(const S2RBlocked *b, size_t *out){
+    size_t per = (size_t)2 + s2r__md_bytes(b->bcls) + s2r__md_bytes(b->pcls)
+                           + s2r__md_bytes(b->ocls) + s2r__md_bytes(b->scls)
+                           + (b->has_stride ? s2r__md_bytes(b->tcls) : 0);
+    size_t len;
+    if(per && b->nblocks > (size_t)SIZE_MAX / per) return 0;
+    len = b->nblocks * per;
+    if(b->bytes > (size_t)SIZE_MAX - len) return 0;
+    *out = len + b->bytes;
+    return 1;
+}
 static inline size_t s2r__blk_body_len(const S2RBlocked *b){
-    return b->nblocks*(2 + s2r__md_bytes(b->bcls) + s2r__md_bytes(b->pcls)
-                         + s2r__md_bytes(b->ocls) + s2r__md_bytes(b->scls)
-                         + (b->has_stride ? s2r__md_bytes(b->tcls) : 0))
-           + b->bytes;
+    size_t len;
+    return s2r__blk_body_len_ck(b,&len) ? len : (size_t)SIZE_MAX;
 }
 /* stage the body in canonical LE so the bytes are identical on any host */
 static inline uint8_t *s2r__blk_stage(const S2RBlocked *b, size_t *out){
-    size_t len=s2r__blk_body_len(b);
+    size_t len;
+    if(!s2r__blk_body_len_ck(b,&len)) return NULL;
     uint8_t *buf=(uint8_t*)malloc(len?len:1);
     if(!buf) return NULL;
     size_t at=0;
@@ -3830,7 +3850,19 @@ static inline S2RError s2r_blocked_load(S2RBlocked *b, const char *path){
     }
     if(!b->nblocks){ fclose(f); return S2R_OK; }
 
-    size_t blen=s2r__blk_body_len(b);
+    size_t blen;
+    /* first lock: the claimed body length has to be arithmetic that closes */
+    if(!s2r__blk_body_len_ck(b,&blen)){ fclose(f); memset(b,0,sizeof *b); return S2R_ERR_CORRUPT; }
+    /* second lock: it also has to be a body that is actually IN the file. The
+     * bytes on disk are the only honest witness of how big the body is, and
+     * they are free - the file is already open and seekable. */
+    {   long here=ftell(f), end;
+        if(here<0 || fseek(f,0,SEEK_END)!=0){ fclose(f); memset(b,0,sizeof *b); return S2R_ERR_IO; }
+        end=ftell(f);
+        if(end<0 || fseek(f,here,SEEK_SET)!=0){ fclose(f); memset(b,0,sizeof *b); return S2R_ERR_IO; }
+        if(end-here < 4 || blen > (size_t)(end-here) - 4u){
+            fclose(f); memset(b,0,sizeof *b); return S2R_ERR_CORRUPT; }
+    }
     uint8_t *body=(uint8_t*)malloc(blen?blen:1);
     if(!body){ fclose(f); memset(b,0,sizeof *b); return S2R_ERR_OOM; }
     if(blen && fread(body,blen,1,f)!=1){ free(body); fclose(f); memset(b,0,sizeof *b); return S2R_ERR_IO; }
