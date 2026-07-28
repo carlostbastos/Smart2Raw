@@ -1,6 +1,6 @@
 {
   "name": "@smart2raw/port-js",
-  "version": "3.3.7",
+  "version": "3.5.0",
   "description": "Pure JavaScript Smart2Raw port for browsers, Node.js, and portable .s2r files.",
   "type": "module",
   "main": "smart2raw.mjs",
