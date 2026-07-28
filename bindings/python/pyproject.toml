@@ -1,5 +1,5 @@
 # Smart2Raw
-# Copyright (C) 2026 Carlos Alberto Terêncio Bastos
+# Copyright (C) 2026 Carlos Alberto Terêncio de Bastos
 # SPDX-License-Identifier: AGPL-3.0-or-later
 [build-system]
 requires = ["setuptools>=61"]
@@ -7,11 +7,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "smart2raw"
-version = "3.3.6"
+version = "3.5.0"
 description = "Python wrapper for the Smart2Raw C library (auto-adaptive numeric storage)"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "AGPL-3.0-or-later OR LicenseRef-Commercial" }
+authors = [{ name = "Carlos Alberto Terêncio de Bastos" }]
 keywords = ["integer storage", "adaptive bit-width", "SIMD", "PFOR", "quantization"]
 
 [project.scripts]
