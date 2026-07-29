@@ -148,6 +148,7 @@ cc -O2 -std=c11 -I include quickstart.c -o quickstart && ./quickstart
 - **A cumulative index for narrow classes** — any range predicate answered exactly in two reads, from 2 KB that does not grow with the data.
 - **Automatic representation choice** — `s2r_recommend()` measures the flat, affine and block-wise forms and names the one to use; `s2r_blocked_build_auto()` classifies the block size from the data.
 - **Portable `.s2r`** — canonical little-endian + CRC32, identical across the C core and all ports, with the same file rejected by all four implementations for the same reason.
+- **A reader that assumes the file is hostile** — since 3.5.1 every length derived from header fields is computed in checked arithmetic and required to fit in the file, because a correct CRC says nothing about a length that wraps.
 
 ## The `.s2r` file format
 
@@ -166,6 +167,8 @@ Self-describing and portable. All multibyte fields are canonical little-endian; 
 
 On little-endian hosts the on-disk payload matches memory byte-for-byte (true zero-copy). On big-endian hosts, reads and writes convert, and the CRC is validated over the canonical LE bytes before any conversion. A reader must reject an unsupported `fmt`, a nonzero reserved byte, a class that disagrees with the signed flag, a count that does not match the file length, and any trailing bytes — all four implementations do.
 
+Since 3.5.1 the contract carries one more rule, and it is the one a CRC cannot enforce: **every length a reader computes from header fields must be computed in checked arithmetic, and the body it describes must fit in the file.** A CRC proves that the bytes present are the bytes written; it proves nothing about a length that wraps. The block-wise header multiplies `nblocks` by the per-block metadata width and adds the payload size — three numbers off disk — and a file can choose them so the sum wraps to something small. That is not corruption; it is a consistent file that lies. The file length is the only witness that cannot be forged from inside the header, and it is free to consult.
+
 `fmt = 3` is emitted only when some block actually has a stride above 1, so a column without one is byte-for-byte the file v3.4.0 wrote and a v3.4.0 reader still opens it. A v3.5.0 reader accepts both, and reads `fmt = 2` as "every stride is 1" — which is what it means.
 
 ## What Smart2Raw cannot do to your data
@@ -173,6 +176,10 @@ On little-endian hosts the on-disk payload matches memory byte-for-byte (true ze
 Every classical alternative has a regime where it **expands** the input. Measured on 4M elements against a 30.52 MB `int64` baseline: dictionary encoding of a high-cardinality column stores a dictionary the size of the data (41.01 MB); RLE on unordered data stores one run per value (30.52 MB); a bitmap only exists when there are two distinct values.
 
 Smart2Raw cannot expand. It classifies by range, so the worst case is "the range needs 64 bits" — which *is* the input. The widest class is the baseline. That bound is asserted in the test suite, and `benchmarks/format_matrix.c` reproduces the whole grid.
+
+The bound applies to the representation the library **recommends**. `s2r_recommend()` starts from the flat pool and only moves down, so it cannot return more than the `int64` baseline. Forcing the block-wise builder alone on maximum-entropy `u64` data, bypassing the planner, costs the per-block metadata: 8,000,240 bytes against 8,000,000, or 0.003%. That is the price of the block bookkeeping, and it is why the planner exists.
+
+Since 3.5.1 there is a second thing it cannot be talked into: **reading a body that is not in the file.** See the format contract above.
 
 ## Where it helps
 
@@ -242,7 +249,7 @@ python bindings/python/test_binding.py
 bash conformance/run_conformance.sh
 ```
 
-The C suite covers all modules, block-wise PFOR (signed and unsigned, frame of reference, affine stride, zone statistics, sorted flags, serialization), the `.s2r` contract, the SIMD predicate family against a scalar reference, a differential fuzz with fixed seeds, regression, backward compatibility, lazy-carry, big-endian COW mmap, analytics — across multiple build gates (`-O3`, `-O2`, no-SIMD, strict ISO C11, an MCU build), plus emulated NEON, RISC-V RVV and ARM SVE2 paths swept across vector lengths. The ARM and big-endian paths are repeated on real hardware via QEMU in CI; RVV and SVE2 remain pending real hardware. CI additionally runs the whole suite under AddressSanitizer and UndefinedBehaviorSanitizer.
+The C suite covers all modules, block-wise PFOR (signed and unsigned, frame of reference, affine stride, zone statistics, sorted flags, serialization), the `.s2r` contract, the SIMD predicate family against a scalar reference, a differential fuzz with fixed seeds, regression, backward compatibility, lazy-carry, big-endian COW mmap, analytics — across multiple build gates (`-O3`, `-O2`, no-SIMD, strict ISO C11, an MCU build), plus the NEON, RISC-V RVV and ARM SVE2 kernels. Those last three deserve a precise word, because "emulated" undersells what is run: the kernels that **ship** execute on the x86 host, checked element by element against a scalar reference, with the emulated **vector length swept from 128 to 1024 bits** and the strip-mine boundaries and tails exercised explicitly. A single real board would have given one length; the sweep covers the family, which is exactly what a length-agnostic kernel has to prove. Separately, CI repeats the whole suite on real arm64 and real big-endian (s390x) through QEMU on every commit. There is no riscv64 CI job yet, so RVV is covered by the sweep and not by a second machine. CI additionally runs the whole suite under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 **One command reproduces the claim of correctness**, and it is the same command the author runs. A deposit that cannot be checked is a press release; this one ships its own falsifier.
 
