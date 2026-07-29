@@ -24,14 +24,23 @@ url: "https://github.com/carlostbastos/Smart2Raw"
 doi: "10.5281/zenodo.20477234"   # concept DOI (resolves to latest)
 identifiers:
   - type: doi
+    value: "10.5281/zenodo.21676456"
+    description: "Version 3.5.1"
+  - type: doi
     value: "10.5281/zenodo.21623772"
     description: "Version 3.5.0"
   - type: doi
     value: "10.5281/zenodo.21614309"
     description: "Version 3.4.0"
   - type: doi
-    value: "10.5281/zenodo.20613701"
+    value: "10.5281/zenodo.20619276"
     description: "Version 3.3.7"
+  - type: doi
+    value: "10.5281/zenodo.20613701"
+    description: "Version 3.3.6"
+  - type: doi
+    value: "10.5281/zenodo.20477235"
+    description: "Version 3.3.x"
   - type: doi
     value: "10.5281/zenodo.20477234"
     description: "Concept DOI (all versions)"
