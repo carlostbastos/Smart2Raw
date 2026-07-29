@@ -16,9 +16,15 @@ This is the canonical record for the project. The full documentation, source, to
 
 ---
 
-## Upgrade notice for 3.4.0 users
+## Upgrade notice: 3.5.0 and 3.4.0
 
-3.5.0 contains a fix for **silent data corruption** present in 3.4.0. A block's frame of reference was held in `int64_t` and the largest base was tracked with a *signed* comparison, even for an unsigned column. A base above `INT64_MAX` read as negative, the bookkeeping class came out too narrow, and the base was **truncated on write**:
+**If you load `.s2r` files you did not write, 3.5.0 and earlier are vulnerable.** `s2r_blocked_load()` sized the body it was about to read as `nblocks × metadata + bytes`. Both terms come off disk, and the sum was done in plain `size_t`. A file declaring `nblocks = 2^22` and a `bytes` near 2^64 makes that sum **wrap** to 16: the reader allocates sixteen bytes and copies four megabytes into them.
+
+That file is 64 bytes long and passes **every** validation that already existed — magic, `fmt`, all four classes, `nblocks == ceil(count/block)`, every field inside its limit, **a correct CRC32 over the real body**, and exact EOF. There is nothing malformed in it. Accidental corruption breaks the CRC; deliberate corruption comes with the right one, and that was the difference left unseen. Confirmed under AddressSanitizer as a 4 MB `heap-buffer-overflow` over a 16-byte region, and as a plain segmentation fault at `-O2`.
+
+Writing was never affected — there both terms describe a structure that already exists in memory. The flat pool was never affected either: it has done `count > SIZE_MAX/eb` since 3.3. One place in the family of readers was missing the guard its siblings had. Fixed in 3.5.1; see below.
+
+3.5.0 also contains a fix for **silent data corruption** present in 3.4.0. A block's frame of reference was held in `int64_t` and the largest base was tracked with a *signed* comparison, even for an unsigned column. A base above `INT64_MAX` read as negative, the bookkeeping class came out too narrow, and the base was **truncated on write**:
 
 ```c
 uint64_t v[2] = { 1, UINT64_MAX };
@@ -29,7 +35,22 @@ No error, no warning, no broken CRC — the file is internally consistent with t
 
 Twenty-five suites of *chosen* cases missed it, because a battery of chosen cases inherits the blind spot of whoever chose them. A new differential fuzz suite — 12 column shapes, random sizes and block sizes, everything checked against a naive reference, with **fixed seeds** — finds it in 9 checks and passes 100,950 on the fix.
 
-## What's new in 3.5.0
+## What's new in 3.5.1
+
+A security fix, and nothing else. **No new API, no format change**: a file written by 3.5.0 is read identically by 3.5.1, and the reverse holds too. 3.5.1 does not touch a single byte of the format — it only stopped accepting files 3.5.0 should never have accepted.
+
+The fix is two locks, and neither adds a dependency:
+
+1. **The arithmetic has to close.** `s2r__blk_body_len_ck()` does the multiply and the add in checked arithmetic and hands back a length only when it is real. No compiler builtins — the same guard shape the flat loader already used, so it stays portable to any C99.
+2. **The body has to actually be in the file.** The bytes on disk are the only honest witness of how big the body is, and they cost nothing to consult: the file is already open and seekable. A 64-byte `.s2r` can no longer ask for a gigabyte.
+
+**Why 31 suites did not catch it.** Same reason as 3.4.1, different target. The suites test files *written* by the library, and then files *corrupted* byte by byte — the two things that happen on their own. None tested a file built on purpose to be internally consistent and lying.
+
+**The regression test proves what it claims.** `tests/test_format_hardening.c` gained a sixth section (46 checks, was 40): the length that wraps, a length that does not wrap but simply is not in the file, the `nblocks × metadata` multiply overflowing on its own, and — as important as the other three — an honest file written by the library that must still load and still sum correctly, because a guard that also rejects real data is not a fix. Against the 3.5.0 header the section aborts under ASan; against 3.5.1 it passes at `-O2`, `-Os`, in C99 and C11 with `-pedantic -Wall -Wextra`, and under ASan+UBSan.
+
+**Four suite counts became one.** `scripts/build_and_test.sh` runs 31 suites over 21 test files, and 31 is what CI verifies. `.zenodo.json` said 25, `README.md` said 17, `CONTRIBUTING.md` said 15 — all frozen at older releases. They now say 31. `SECURITY.md` no longer claims the supported line is 3.3.x, and gains an explicit threat model: reading a file you did not write is the attack surface.
+
+## Previously, in 3.5.0
 
 **The frame of reference gains a scale.** v3.4.0 removed an *offset* the data did not need. It did not remove a *scale*. A column of `{500, 1500, … 11500}` spans 11000 and therefore takes 14 bits, but every value is `base + 1000·i` with `i` in 0..11 — four bits of index wearing a fourteen-bit coat.
 
@@ -231,7 +252,7 @@ Smart2Raw follows an open-core model. The open edition — everything in this ar
 
 ## Citation
 
-If you use Smart2Raw in research, benchmarks, papers, reports, products or technical comparisons, please cite it using `CITATION.cff`. Releases are archived on Zenodo with versioned DOIs under the concept DOI **10.5281/zenodo.20477234**, which always resolves to the latest version. This release (3.5.0): **10.5281/zenodo.21623772**.
+If you use Smart2Raw in research, benchmarks, papers, reports, products or technical comparisons, please cite it using `CITATION.cff`. Releases are archived on Zenodo with versioned DOIs under the concept DOI **10.5281/zenodo.20477234**, which always resolves to the latest version. This release (3.5.1): **10.5281/zenodo.21676456**. The previous 3.5.0 release is **10.5281/zenodo.21623772** and 3.4.0 is **10.5281/zenodo.21614309**.
 
 ## One-sentence summary
 
